@@ -247,8 +247,9 @@ bg = ss.bg
 st.markdown('<p class="hero-title">Send It · Personalized Climbing Beta Optimizer</p>', unsafe_allow_html=True)
 st.markdown('<p class="tagline">Video → pose → holds → <b>your</b> movement-cost graph → minimum-cost beta. '
             'Here is what you did, what the optimizer recommends, and why.</p>', unsafe_allow_html=True)
-pills = [f"{'cached analysis' if ss.mode == 'cached' else 'live analysis'}",
-         f"{A['n_frames']} frames @ {A['fps']:.0f} fps", f"pose in {A['timing']['pose_s']:.1f}s",
+pills = [f"{'cached analysis (computed by this pipeline)' if ss.mode == 'cached' else 'live analysis'}",
+         f"{A['n_frames']} frames @ {A['fps']:.0f} fps",
+         (f"pose in {A['timing']['pose_s']:.1f}s" if A['timing']['pose_s'] > 0.5 else "pose cached"),
          "camera: static" if A["camera"]["static"] else f"camera motion compensated ({A['camera']['max_shift_px']:.0f}px pan)",
          f"holds: {A['hold_method']}" + (" + human-corrected" if ss.curated else "")]
 st.markdown(" ".join(f'<span class="pill">{p}</span>' for p in pills), unsafe_allow_html=True)
