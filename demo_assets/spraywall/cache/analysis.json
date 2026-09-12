@@ -29,9 +29,9 @@
   "ref_idx": 380
  },
  "timing": {
-  "pose_s": 0.001667022705078125,
-  "stabilize_s": 0.02024698257446289,
-  "total_s": 0.052648067474365234
+  "pose_s": 0.001809835433959961,
+  "stabilize_s": 0.020872116088867188,
+  "total_s": 0.06620097160339355
  },
  "morphology": {
   "arm_span_px": 342.6377157825118,
@@ -896,6 +896,7 @@
  "events": [
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 62,
    "start": 0,
    "end": 10,
@@ -903,6 +904,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 61,
    "start": 6,
    "end": 16,
@@ -910,6 +912,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 62,
    "start": 18,
    "end": 30,
@@ -917,6 +920,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 12,
    "start": 42,
    "end": 52,
@@ -924,6 +928,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 12,
    "start": 57,
    "end": 96,
@@ -931,6 +936,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 20,
    "start": 264,
    "end": 279,
@@ -938,6 +944,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 20,
    "start": 264,
    "end": 288,
@@ -945,6 +952,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 25,
    "start": 339,
    "end": 356,
@@ -952,6 +960,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 29,
    "start": 340,
    "end": 348,
@@ -959,6 +968,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 29,
    "start": 350,
    "end": 359,
@@ -966,6 +976,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 29,
    "start": 361,
    "end": 412,
@@ -973,6 +984,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 25,
    "start": 374,
    "end": 382,
@@ -980,6 +992,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 21,
    "start": 410,
    "end": 416,
@@ -987,6 +1000,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 29,
    "start": 415,
    "end": 439,
@@ -994,6 +1008,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 32,
    "start": 421,
    "end": 435,
@@ -1001,6 +1016,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 35,
    "start": 446,
    "end": 580,
@@ -1008,6 +1024,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 35,
    "start": 537,
    "end": 547,
@@ -1015,6 +1032,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 35,
    "start": 583,
    "end": 601,
@@ -1022,6 +1040,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 45,
    "start": 640,
    "end": 654,
@@ -1029,6 +1048,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 63,
    "start": 671,
    "end": 680,
@@ -1036,6 +1056,7 @@
   },
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 63,
    "start": 682,
    "end": 688,
@@ -1043,10 +1064,181 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 64,
    "start": 729,
    "end": 760,
    "frames": 32
+  }
+ ],
+ "foot_events": [
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 2,
+   "start": 4,
+   "end": 10,
+   "frames": 7
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 12,
+   "start": 117,
+   "end": 123,
+   "frames": 7
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 12,
+   "start": 117,
+   "end": 123,
+   "frames": 7
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 10,
+   "start": 339,
+   "end": 391,
+   "frames": 53
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 8,
+   "start": 341,
+   "end": 370,
+   "frames": 30
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 8,
+   "start": 380,
+   "end": 390,
+   "frames": 11
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 12,
+   "start": 391,
+   "end": 401,
+   "frames": 11
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 16,
+   "start": 405,
+   "end": 412,
+   "frames": 8
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 15,
+   "start": 405,
+   "end": 412,
+   "frames": 8
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 15,
+   "start": 417,
+   "end": 470,
+   "frames": 54
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 12,
+   "start": 418,
+   "end": 447,
+   "frames": 30
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 16,
+   "start": 458,
+   "end": 465,
+   "frames": 8
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 15,
+   "start": 473,
+   "end": 484,
+   "frames": 12
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 15,
+   "start": 490,
+   "end": 496,
+   "frames": 7
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 20,
+   "start": 503,
+   "end": 512,
+   "frames": 10
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 20,
+   "start": 522,
+   "end": 529,
+   "frames": 8
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 20,
+   "start": 559,
+   "end": 588,
+   "frames": 30
+  },
+  {
+   "hand": "LEFT_FOOT",
+   "limb": "LEFT_FOOT",
+   "hold_id": 25,
+   "start": 598,
+   "end": 633,
+   "frames": 36
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 29,
+   "start": 634,
+   "end": 642,
+   "frames": 9
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 25,
+   "start": 653,
+   "end": 665,
+   "frames": 13
+  },
+  {
+   "hand": "RIGHT_FOOT",
+   "limb": "RIGHT_FOOT",
+   "hold_id": 25,
+   "start": 681,
+   "end": 692,
+   "frames": 12
   }
  ],
  "placements": [

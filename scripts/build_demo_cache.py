@@ -18,7 +18,8 @@ sys.path.insert(0, ROOT)
 
 from sendit import viz  # noqa: E402
 from sendit.optimizer import hold_graph_edges  # noqa: E402
-from sendit.pipeline import analyze_video, run_optimization, recompute_observed  # noqa: E402
+from sendit.pipeline import analyze_video, run_optimization, recompute_observed, recompute_feet, feet_for_result, fourlimb_cache_key  # noqa: E402
+from sendit.optimizer import Weights, Feasibility  # noqa: E402
 from sendit.pose import load_pose  # noqa: E402
 
 
@@ -59,8 +60,26 @@ def main():
             print("   overlay video ->", ov)
         bg = cv2.imread(os.path.join(cache, "background.png"))
         box = viz.crop_box(holds, bg.shape[1], bg.shape[0])
-        R = run_optimization(holds, a["morphology"], placements)
+        fin = None
+        if d.get("default_finish") == "top":
+            fin = [min([h for h in holds if h.get("on_route", True) and h.get("role") != "foot"], key=lambda h: h["y"])["id"]]
+        R = run_optimization(holds, a["morphology"], placements, finish_ids=fin)
         obs, opt, cmp_ = R["observed"], R["optimized"], R["comparison"]
+        # ---- four-limb plans (measured + 85 %) precomputed so the UI toggle is instant
+        foot_events = recompute_feet(a, holds, pose_wall)
+        store = {}
+        for scale in (1.0, 0.85):
+            import time as _t
+            t0 = _t.time()
+            R4 = run_optimization(holds, a["morphology"], placements, finish_ids=fin, morph_scale=scale, fourlimb=True)
+            q = R4["optimized_4limb"]
+            key = fourlimb_cache_key(holds, R4["weights"], R4["feasibility"], scale, R4["finish_ids"])
+            store[key] = q
+            print(f"   four-limb scale {scale}: {_t.time() - t0:.1f}s {q['search']['method']} exact={q['search']['exact']} cost={q['total_cost']:.2f} hand={q['n_hand_moves']} foot={q['n_foot_moves']} feet={q['feet_used']}")
+            if scale == 1.0:
+                viz.render_comparison(bg, holds, obs, q, cmp_, box, partial=(d.get("default_finish") == "top"),
+                                      feet_obs=feet_for_result(foot_events, obs), feet_opt=q["feet_by_state"]).save(os.path.join(ROOT, "demo_assets", d["key"], "fourlimb.png"))
+        json.dump(store, open(os.path.join(cache, "fourlimb.json"), "w"), indent=1)
         out = os.path.join(ROOT, "demo_assets", d["key"])
         viz.render_comparison(bg, holds, obs, opt, cmp_, box).save(os.path.join(out, "comparison.png"))
         viz.render_diff(bg, holds, obs, opt, cmp_, box).save(os.path.join(out, "diff.png"))

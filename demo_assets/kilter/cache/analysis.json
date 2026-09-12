@@ -29,9 +29,9 @@
   "ref_idx": 66
  },
  "timing": {
-  "pose_s": 1.9803776741027832,
-  "stabilize_s": 1.8468048572540283,
-  "total_s": 6.28551173210144
+  "pose_s": 0.0023260116577148438,
+  "stabilize_s": 0.004255056381225586,
+  "total_s": 0.9714028835296631
  },
  "morphology": {
   "arm_span_px": 417.83403401119506,
@@ -203,6 +203,7 @@
  "events": [
   {
    "hand": "LEFT",
+   "limb": "LEFT",
    "hold_id": 9,
    "start": 18,
    "end": 118,
@@ -210,6 +211,7 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 2,
    "start": 18,
    "end": 87,
@@ -217,12 +219,14 @@
   },
   {
    "hand": "RIGHT",
+   "limb": "RIGHT",
    "hold_id": 4,
    "start": 94,
    "end": 132,
    "frames": 39
   }
  ],
+ "foot_events": [],
  "placements": [
   {
    "hand": "LEFT",

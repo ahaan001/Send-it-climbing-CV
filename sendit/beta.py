@@ -9,14 +9,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from .pose import hand_point
+from .pose import hand_point, foot_point
 
 
 def contact_events(pose: dict, holds: list, arm_span_px: float,
                    contact_radius_frac: float = 0.12, min_frames: int = 4, min_vis: float = 0.5,
-                   gap_frames: int = 3):
+                   gap_frames: int = 3, point_fn=hand_point, limb_kind: str = "hand"):
+    """Contact events for both limbs of one kind. limb_kind='hand' uses the
+    hand centre against hand-usable holds; 'foot' uses the toe/ankle against
+    every on-route hold (foot-only ones included) and labels limbs LEFT_FOOT/RIGHT_FOOT."""
     radius = contact_radius_frac * arm_span_px
-    route = [h for h in holds if h.get("on_route", True) and h.get("role") != "foot"]
+    if limb_kind == "foot":
+        route = [h for h in holds if h.get("on_route", True)]
+    else:
+        route = [h for h in holds if h.get("on_route", True) and h.get("role") != "foot"]
     if not route:
         return []
     hx = np.array([h["x"] for h in route])
@@ -25,10 +31,11 @@ def contact_events(pose: dict, holds: list, arm_span_px: float,
     idxs = sorted(pose["frames"].keys())
     events = []
     for side in ("LEFT", "RIGHT"):
+        label = side if limb_kind == "hand" else f"{side}_FOOT"
         cur = None  # [hold_id, start, end, count]
         last_f = None
         for f in idxs:
-            hp = hand_point(pose["frames"][f], side, min_vis)
+            hp = point_fn(pose["frames"][f], side, min_vis)
             on = None
             if hp is not None:
                 d = np.hypot(hx - hp[0], hy - hp[1])
@@ -37,7 +44,7 @@ def contact_events(pose: dict, holds: list, arm_span_px: float,
                     on = hid[k]
             if cur is not None and (on != cur[0] or (last_f is not None and f - last_f > gap_frames)):
                 if cur[3] >= min_frames:
-                    events.append({"hand": side, "hold_id": cur[0], "start": cur[1], "end": cur[2], "frames": cur[3]})
+                    events.append({"hand": label, "limb": label, "hold_id": cur[0], "start": cur[1], "end": cur[2], "frames": cur[3]})
                 cur = None
             if on is not None:
                 if cur is None:
@@ -47,9 +54,31 @@ def contact_events(pose: dict, holds: list, arm_span_px: float,
                     cur[3] += 1
             last_f = f
         if cur is not None and cur[3] >= min_frames:
-            events.append({"hand": side, "hold_id": cur[0], "start": cur[1], "end": cur[2], "frames": cur[3]})
+            events.append({"hand": label, "limb": label, "hold_id": cur[0], "start": cur[1], "end": cur[2], "frames": cur[3]})
     events.sort(key=lambda e: e["start"])
     return events
+
+
+def observed_feet(pose: dict, holds: list, arm_span_px: float, contact_radius_frac: float = 0.12,
+                  min_frames: int = 4, min_vis: float = 0.5):
+    """Foot contact events measured from toe/ankle landmarks (LEFT_FOOT/RIGHT_FOOT)."""
+    return contact_events(pose, holds, arm_span_px, contact_radius_frac, min_frames, min_vis,
+                          point_fn=foot_point, limb_kind="foot")
+
+
+def feet_at_placements(foot_events: list, placements: list):
+    """For each hand placement frame, which hold (if any) each foot was on:
+    [{"LEFT_FOOT": id|None, "RIGHT_FOOT": id|None}], aligned with placements.
+    None = not on a detected hold (smearing, on the mat, or not visible)."""
+    out = []
+    for p in placements:
+        f = p["frame"]
+        feet = {"LEFT_FOOT": None, "RIGHT_FOOT": None}
+        for e in foot_events:
+            if e["start"] <= f <= e["end"] + 2:
+                feet[e["limb"]] = e["hold_id"]
+        out.append(feet)
+    return out
 
 
 def observed_placements(events: list, flicker_frames: int = 12):

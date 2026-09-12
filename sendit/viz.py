@@ -15,6 +15,7 @@ C_OBSERVED = (255, 140, 0)      # orange
 C_OPTIMIZED = (0, 200, 255)     # cyan
 C_GEOMETRIC = (190, 120, 255)   # violet
 C_CRUX = (255, 40, 40)
+C_FEET = (120, 255, 200)        # mint: feet markers
 C_SHARED = (255, 255, 255)
 C_OFF = (150, 150, 150)
 C_START = (80, 255, 120)
@@ -107,7 +108,9 @@ def _arrow(d: ImageDraw.ImageDraw, p0, p1, color, width, s, shorten=0.0):
 
 
 def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, number=True, width_mult=1.0):
-    """Arrows for each hand move (from -> to); crux move in red."""
+    """Arrows for each hand move (from -> to); crux move in red. Foot moves
+    are drawn by draw_feet(), so they are skipped here (numbering counts
+    hand moves only)."""
     if not result or not result.get("moves"):
         return img
     d = ImageDraw.Draw(img, "RGBA")
@@ -115,7 +118,12 @@ def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, num
     hid = {h["id"]: h for h in holds}
     f = _font(int(14 * s))
     w = max(2, int(5 * s * width_mult))
+    k = 0
     for i, m in enumerate(result["moves"]):
+        limb = m.get("limb") or m.get("hand")
+        if limb not in ("LEFT", "RIGHT"):
+            continue
+        k += 1
         a, b = hid.get(m["from"]), hid.get(m["to"])
         if a is None or b is None:
             continue
@@ -124,7 +132,7 @@ def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, num
         _arrow(d, (a["x"], a["y"]), (b["x"], b["y"]), col + (235,), w + (2 if is_crux else 0), s, shorten=13 * s)
         if number:
             mx, my = (a["x"] + b["x"]) / 2, (a["y"] + b["y"]) / 2
-            txt = f"{i + 1}{'L' if m['hand'] == 'LEFT' else 'R'}"
+            txt = f"{k}{'L' if limb == 'LEFT' else 'R'}"
             tw = d.textlength(txt, font=f)
             d.rounded_rectangle([mx - tw / 2 - 4 * s, my - 9 * s, mx + tw / 2 + 4 * s, my + 9 * s], radius=4 * s,
                                 fill=col + (230,))
@@ -136,6 +144,48 @@ def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, num
             d.rounded_rectangle([b["x"] + 14 * s, b["y"] + 8 * s, b["x"] + 14 * s + tw + 8 * s, b["y"] + 8 * s + 16 * s],
                                 radius=3 * s, fill=C_CRUX + (220,))
             d.text((b["x"] + 18 * s, b["y"] + 9 * s), lab, fill=(255, 255, 255, 255), font=fl)
+    return img
+
+
+def draw_feet(img: Image.Image, holds: list, feet_by_state, color=C_FEET, hand_states=None, moves=None):
+    """Feet layer. feet_by_state: list aligned with states, each [left_foot_id, right_foot_id]
+    (None = not on a hold). Draws hollow squares at every foot hold used, with the
+    state numbers in which that foot was there, and a thin line to the hands'
+    midpoint for the state where the foot is first placed."""
+    if not feet_by_state:
+        return img
+    d = ImageDraw.Draw(img, "RGBA")
+    s = _scale(img)
+    hid = {h["id"]: h for h in holds}
+    f = _font(int(11 * s))
+    half = 8 * s
+    placed = {}   # (foot_id) -> list of state indices
+    first_seen = {}
+    for i, feet in enumerate(feet_by_state):
+        if not feet:
+            continue
+        for side, fid in zip(("L", "R"), feet):
+            if fid is None or fid not in hid:
+                continue
+            placed.setdefault(fid, []).append(f"{i}{side.lower()}")
+            if (fid, side) not in first_seen:
+                first_seen[(fid, side)] = i
+    for fid, tags in placed.items():
+        h = hid[fid]
+        x, y = h["x"], h["y"]
+        d.rectangle([x - half, y - half, x + half, y + half], outline=color + (255,), width=max(2, int(2.5 * s)))
+        d.rectangle([x - half * 0.55, y - half * 0.55, x + half * 0.55, y + half * 0.55], fill=color + (120,))
+        txt = "f " + ",".join(tags[:3]) + ("…" if len(tags) > 3 else "")
+        tw = d.textlength(txt, font=f)
+        d.rounded_rectangle([x + half + 2 * s, y + 2 * s, x + half + 2 * s + tw + 6 * s, y + 2 * s + 13 * s], radius=3 * s, fill=(0, 0, 0, 160))
+        d.text((x + half + 5 * s, y + 2 * s), txt, fill=color + (255,), font=f)
+    if hand_states:
+        for (fid, side), i in first_seen.items():
+            if i < len(hand_states):
+                L, R = hand_states[i][0], hand_states[i][1]
+                if L in hid and R in hid:
+                    mx, my = (hid[L]["x"] + hid[R]["x"]) / 2, (hid[L]["y"] + hid[R]["y"]) / 2
+                    d.line([(hid[fid]["x"], hid[fid]["y"]), (mx, my)], fill=color + (110,), width=max(1, int(1.5 * s)))
     return img
 
 
@@ -152,33 +202,46 @@ def _title_bar(img: Image.Image, title: str, subtitle: str = "", color=(255, 255
 
 
 def render_beta_panel(bg_bgr: np.ndarray, holds: list, result: Optional[dict], title: str, color,
-                      box=None, subtitle: str = "", show_labels=True, crux=True) -> Image.Image:
+                      box=None, subtitle: str = "", show_labels=True, crux=True, feet=None) -> Image.Image:
+    """feet: optional list aligned with result['states'] of [left_foot, right_foot]
+    hold ids (None = none); for four-limb results pass result['feet_by_state']."""
     img = to_pil(bg_bgr)
     draw_holds(img, holds, show_labels=show_labels)
+    if feet:
+        draw_feet(img, holds, feet, hand_states=result.get("states") if result else None)
     if result:
         draw_path(img, holds, result, color, crux=crux)
     if box:
         img = img.crop(box)
     if not subtitle and result:
-        subtitle = f"cost {result['total_cost']:.2f}  |  {result['n_moves']} hand moves  |  max reach {result['max_reach_frac']:.0%} of arm span"
+        nh = result.get("n_hand_moves", result["n_moves"])
+        nf = result.get("n_foot_moves", 0)
+        subtitle = f"cost {result['total_cost']:.2f}  |  {nh} hand moves" + (f" + {nf} foot moves" if nf else "") + f"  |  max reach {result['max_reach_frac']:.0%} of arm span"
+        srch = result.get("search")
+        if srch and result.get("limbs") == "all":
+            subtitle += f"  |  {'exact A*' if srch['exact'] else 'beam ' + str(srch['beam']) + ' (approx.)'}"
     return _title_bar(img, title, subtitle, color)
 
 
 def render_comparison(bg_bgr: np.ndarray, holds: list, observed: Optional[dict], optimized: Optional[dict],
-                      comparison: dict, box=None, partial: bool = False) -> Image.Image:
+                      comparison: dict, box=None, partial: bool = False, feet_obs=None, feet_opt=None) -> Image.Image:
     h_img, w_img = bg_bgr.shape[:2]
     box = box or crop_box(holds, w_img, h_img)
-    left = render_beta_panel(bg_bgr, holds, observed, "OBSERVED beta (from video)" + (" · partial clip" if partial else ""), C_OBSERVED, box)
+    left = render_beta_panel(bg_bgr, holds, observed, "OBSERVED beta (from video)" + (" · partial clip" if partial else ""), C_OBSERVED, box, feet=feet_obs)
     imp = comparison.get("improvement_frac")
     sub = None
-    if optimized and partial:
+    fourlimb = bool(optimized and optimized.get("limbs") == "all")
+    if fourlimb:
+        sub = None   # render_beta_panel builds the hand+foot / search-method subtitle
+    elif optimized and partial:
         sub = f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  max reach {optimized['max_reach_frac']:.0%}  |  full-route plan"
     elif optimized and imp is not None:
         sub = (f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  "
                f"max reach {optimized['max_reach_frac']:.0%}  |  {imp:+.0%} vs observed" if imp != 0 else
                f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  same as observed")
-    right = render_beta_panel(bg_bgr, holds, optimized, "OPTIMIZED beta (min-cost search)", C_OPTIMIZED, box,
-                              subtitle=sub or "", crux=False)
+    right = render_beta_panel(bg_bgr, holds, optimized,
+                              "FULL-BODY plan (hands + feet, min-cost search)" if fourlimb else "OPTIMIZED beta (min-cost search)",
+                              C_OPTIMIZED, box, subtitle=sub or "", crux=False, feet=feet_opt)
     gap = 12
     out = Image.new("RGB", (left.width + right.width + gap, max(left.height, right.height)), (18, 18, 22))
     out.paste(left, (0, 0))

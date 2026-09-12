@@ -18,8 +18,10 @@ import streamlit as st
 
 from sendit import viz
 from sendit.holds import GRIP_LABELS, make_hold, next_id
-from sendit.optimizer import Weights, Feasibility, hold_graph_edges, LEFT
-from sendit.pipeline import analyze_video, load_analysis, recompute_observed, run_optimization
+from dataclasses import astuple
+from sendit.optimizer import Weights, Feasibility, hold_graph_edges, LEFT, RIGHT, HANDS, TERM_KEYS
+from sendit.pipeline import (analyze_video, load_analysis, recompute_observed, recompute_feet, run_optimization,
+                             feet_for_result, fourlimb_cache_key)
 from sendit.pose import load_pose
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +138,9 @@ def set_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
     ss.analysis, ss.pose_wall, ss.bg = analysis, pose_wall, bg
     ss.holds = [dict(h) for h in holds]
     ss.placements = recompute_observed(analysis, ss.holds, pose_wall) if curated else analysis["placements"]
+    ss.foot_events = recompute_feet(analysis, ss.holds, pose_wall) if curated else analysis.get("foot_events", [])
+    fl_path = os.path.join(analysis["cache_dir"], "fourlimb.json")
+    ss.fourlimb_store = json.load(open(fl_path)) if os.path.exists(fl_path) else {}
     ss.mode, ss.curated = mode, curated
     ss.selected, ss.last_click = None, None
     ss.box = viz.crop_box(ss.holds, bg.shape[1], bg.shape[0])
@@ -150,6 +155,7 @@ def hid_map():
 def refresh_observed():
     ss = st.session_state
     ss.placements = recompute_observed(ss.analysis, ss.holds, ss.pose_wall)
+    ss.foot_events = recompute_feet(ss.analysis, ss.holds, ss.pose_wall)
 
 
 def finish_ids_from_choice():
@@ -162,22 +168,46 @@ def finish_ids_from_choice():
     return [int(ss.finish_choice)]
 
 
-def optimize(weights, feas, morph_scale=1.0):
+@st.cache_data(show_spinner=False, max_entries=256)
+def _opt_cached(holds_json, morph_json, placements_json, w_tuple, f_tuple, scale, finish_tuple, fourlimb, fl_kwargs):
+    holds = json.loads(holds_json)
+    return run_optimization(holds, json.loads(morph_json), json.loads(placements_json), Weights(*w_tuple),
+                            Feasibility(*f_tuple), morph_scale=scale, finish_ids=list(finish_tuple) if finish_tuple else None,
+                            fourlimb=fourlimb, **dict(fl_kwargs))
+
+
+def optimize(weights, feas, morph_scale=1.0, fourlimb=False, fl_kwargs=()):
+    """Memoized: sliders, ratings and hold edits re-optimize instantly after the first run.
+    Four-limb results precomputed by scripts/build_demo_cache.py are used when inputs match."""
     ss = st.session_state
-    return run_optimization(ss.holds, ss.analysis["morphology"], ss.placements, weights, feas,
-                            morph_scale=morph_scale, finish_ids=finish_ids_from_choice())
+    fin = finish_ids_from_choice()
+    R = _opt_cached(json.dumps(ss.holds, sort_keys=True), json.dumps(ss.analysis["morphology"], sort_keys=True),
+                    json.dumps(ss.placements, sort_keys=True), astuple(weights), astuple(feas), float(morph_scale),
+                    tuple(fin) if fin else None, False, ())
+    if fourlimb:
+        key = fourlimb_cache_key(ss.holds, R["weights"], R["feasibility"], float(morph_scale), R["finish_ids"])
+        pre = ss.get("fourlimb_store", {}).get(key)
+        if pre is not None:
+            R = dict(R)
+            R["optimized_4limb"] = pre
+        else:
+            R = _opt_cached(json.dumps(ss.holds, sort_keys=True), json.dumps(ss.analysis["morphology"], sort_keys=True),
+                            json.dumps(ss.placements, sort_keys=True), astuple(weights), astuple(feas), float(morph_scale),
+                            tuple(fin) if fin else None, True, tuple(sorted(dict(fl_kwargs).items())))
+    return R
 
 
 def cost_breakdown_chart(results: list, colors: list):
     """Stacked bars: per-move cost by term, one group per beta."""
     fig = go.Figure()
-    terms = ["reach", "grip", "move", "travel", "direction", "cross", "foot"]
+    terms = TERM_KEYS
     palette = {"reach": "#4f8cff", "grip": "#ff6b6b", "move": "#a0a7b4", "travel": "#7bd389",
-               "direction": "#ffd166", "cross": "#c77dff", "foot": "#ff9f43"}
+               "direction": "#ffd166", "cross": "#c77dff", "foot": "#ff9f43", "hang": "#ff5c8a",
+               "fmove": "#6dd3c7", "ftravel": "#3fb8a8", "fcross": "#2a8f82"}
     for res, col in zip(results, colors):
         if not res:
             continue
-        x = [f"{res['label'][:3]} · {i + 1}{'L' if m['hand'] == LEFT else 'R'}" for i, m in enumerate(res["moves"])]
+        x = [f"{res['label'][:3]} · {i + 1}{limb_tag(m)}" for i, m in enumerate(res["moves"])]
         for t in terms:
             y = [m["terms"].get(t, 0.0) for m in res["moves"]]
             if sum(y) < 1e-9:
@@ -190,13 +220,22 @@ def cost_breakdown_chart(results: list, colors: list):
     return fig
 
 
+def limb_tag(m):
+    limb = m.get("limb") or m.get("hand")
+    return {LEFT: "L", RIGHT: "R", "LEFT_FOOT": "Lf", "RIGHT_FOOT": "Rf"}.get(limb, "?")
+
+
 def sequence_text(res, hid):
     if not res:
         return "—"
-    L, R = res["start_state"]
+    L, R = res["start_state"][0], res["start_state"][1]
     parts = [f"start L:{hid[L]['label'] if L in hid else L} R:{hid[R]['label'] if R in hid else R}"]
     for m in res["moves"]:
-        parts.append(f"{'L' if m['hand'] == LEFT else 'R'}→{hid[m['to']]['label'] if m['to'] in hid else m['to']} ({m['reach_frac']:.0%})")
+        tgt = hid[m["to"]]["label"] if m["to"] in hid else ("loose" if m["to"] is None else m["to"])
+        if (m.get("limb") or m.get("hand")) in HANDS:
+            parts.append(f"{limb_tag(m)}→{tgt} ({m['reach_frac']:.0%})")
+        else:
+            parts.append(f"{limb_tag(m)}→{tgt}")
     return "  ·  ".join(parts)
 
 
@@ -453,6 +492,41 @@ with tab_opt:
         st.warning(f"Graph was disconnected under the envelope; loosened to {opt['relaxed_to']:.2f} × arm span to find a path.")
 
     st.image(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial), width="stretch")
+
+    # ---- four-limb (hands + feet) plan, off by default
+    fb1, fb2 = st.columns([1, 3])
+    show_feet = fb1.toggle("Full-body plan (hands + feet)", key="show_feet", value=False)
+    fast_beam = fb2.checkbox("Fast approximate search (beam) when not precomputed", key="fast_beam", value=False,
+                             help="Exact A* takes ~15 s on a dense wall; beam search is faster but approximate and labelled as such.")
+    if show_feet:
+        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1} if fast_beam else {}
+        with st.spinner("Searching the hands + feet state space…"):
+            R4 = optimize(WEIGHTS, FEAS, 1.0, fourlimb=True, fl_kwargs=tuple(sorted(fl_kwargs.items())))
+        q = R4.get("optimized_4limb")
+        if q is None:
+            st.error("No full-body plan found.")
+        else:
+            srch = q["search"]
+            method = ("exact A* search" if srch["exact"] else f"beam search (width {srch['beam']}, approximate)")
+            cq1, cq2, cq3, cq4 = st.columns(4)
+            with cq1:
+                card("Full-body plan cost", f"{q['total_cost']:.2f}", f"{q['n_hand_moves']} hand + {q['n_foot_moves']} foot moves", "opt")
+            with cq2:
+                card("Search", method, f"{srch['n_expanded']:,} states expanded · {srch['runtime_s']:.1f} s · est. {srch['est_states']:,.0f} joint states")
+            with cq3:
+                card("Feet used", ", ".join(f"H{i}" for i in q["feet_used"]) or "none (ground / cut loose)", "holds under the feet along the plan")
+            with cq4:
+                card("Hands-only plan", f"{opt['total_cost']:.2f}", "same hand objective without foot terms (not directly comparable)")
+            feet_obs = feet_for_result(ss.get("foot_events", []), obs) if obs else None
+            st.image(viz.render_comparison(bg, ss.holds, obs, q, cmp_, ss.box, partial=partial,
+                                           feet_obs=feet_obs, feet_opt=q["feet_by_state"]), width="stretch")
+            st.caption("State = (left hand, right hand, left foot, right foot); a move relocates one limb. Feet must sit inside the "
+                       "climber's leg window below the hands (0.35–1.25 × body-height proxy) and a foot may cut loose at a cost. "
+                       "Mint squares = foot holds with the state numbers in which a foot is on them. Observed feet come from toe/ankle "
+                       "landmarks (blank = smearing, on the mat, or not detected).")
+            st.markdown(f"<span class='opt'><b>Full-body plan</b></span>: {sequence_text(q, hid)}", unsafe_allow_html=True)
+            with st.expander("Full-body plan cost breakdown"):
+                st.plotly_chart(cost_breakdown_chart([q], [viz.C_OPTIMIZED]), width="stretch")
     if cmp_.get("crux"):
         st.markdown(f"**Predicted crux (highest-cost move under our model):** {cmp_['crux']['explanation']}")
     if partial:

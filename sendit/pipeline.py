@@ -132,6 +132,7 @@ def analyze_video(video_path: str, cache_dir: str, force: bool = False,
     placements = beta_mod.truncate_at_finish(placements, [h["id"] for h in holds if h.get("role") == "finish"],
                                              morph["arm_span_px"], hid=hid)
     context = beta_mod.measured_move_context(pose_wall, placements)
+    foot_events = beta_mod.observed_feet(pose_wall, holds, morph["arm_span_px"], contact_radius_frac, min_contact_frames)
     report("observed beta", 1.0)
 
     analysis = {
@@ -145,6 +146,7 @@ def analyze_video(video_path: str, cache_dir: str, force: bool = False,
         "wall_type": wall_type,
         "holds": holds,
         "events": events,
+        "foot_events": foot_events,
         "placements": placements,
         "move_context": context,
         "settings": {"contact_radius_frac": contact_radius_frac, "min_contact_frames": min_contact_frames},
@@ -173,12 +175,25 @@ def recompute_observed(analysis: dict, holds: list, pose: dict | None = None) ->
                                        analysis["morphology"]["arm_span_px"], hid=hid)
 
 
+def recompute_feet(analysis: dict, holds: list, pose: dict | None = None) -> list:
+    """Foot contact events against an edited hold set (measured, not suggested)."""
+    if pose is None:
+        pose = pose_mod.load_pose(os.path.join(analysis["cache_dir"], "pose_wall.json"))
+    s = analysis.get("settings", {})
+    return beta_mod.observed_feet(pose, holds, analysis["morphology"]["arm_span_px"],
+                                  s.get("contact_radius_frac", 0.12), s.get("min_contact_frames", 4))
+
+
 def run_optimization(holds: list, morphology: dict, placements: list,
                      weights: Weights | None = None, feas: Feasibility | None = None,
                      morph_scale: float = 1.0, calibrate: bool = True,
-                     start_state=None, finish_ids=None) -> dict:
+                     start_state=None, finish_ids=None, fourlimb: bool = False,
+                     fourlimb_exact_threshold: int = 60_000, fourlimb_max_expansions: int = 150_000,
+                     fourlimb_beam: int = 200) -> dict:
     """Score the observed beta and compute the optimized beta under the same
-    objective for (optionally scaled) morphology."""
+    objective for (optionally scaled) morphology. fourlimb=True additionally
+    computes the hands+feet plan (result['optimized_4limb']); the hands-only
+    comparison stays the headline."""
     W = weights or Weights()
     F = feas or Feasibility()
     hid = {h["id"]: h for h in holds}
@@ -215,8 +230,41 @@ def run_optimization(holds: list, morphology: dict, placements: list,
                                    [{"hand": m["hand"], "hold_id": m["to"]} for m in geometric["moves"]],
                                    label="Shortest geometric path")
     cmp_ = compare(observed, optimized, hid)
-    return {
+    out = {
         "climber": climber, "measured": measured, "weights": W, "feasibility": F_used,
         "start_state": list(st), "finish_ids": list(finish_ids),
         "observed": observed, "optimized": optimized, "geometric": geometric, "comparison": cmp_,
+        "optimized_4limb": None,
     }
+    if fourlimb:
+        out["optimized_4limb"] = optimize_beta(holds, climber, W, F_used, st, finish_ids, label="Full-body plan",
+                                               limbs="all", exact_threshold=fourlimb_exact_threshold,
+                                               max_expansions=fourlimb_max_expansions, beam=fourlimb_beam)
+    return out
+
+
+def feet_for_result(foot_events: list, result: dict | None):
+    """Observed feet aligned with an observed result's states: state 0 uses the
+    first move's frame, state i uses move i's frame. None where no foot hold
+    was detected (smearing, on the mat, not visible)."""
+    if not result or not result.get("moves") or not foot_events:
+        return None
+    frames = [result["moves"][0].get("frame")] + [m.get("frame") for m in result["moves"]]
+    out = []
+    for f in frames:
+        feet = [None, None]
+        if f is not None:
+            for e in foot_events:
+                if e["start"] <= f <= e["end"] + 2:
+                    feet[0 if e["limb"] == "LEFT_FOOT" else 1] = e["hold_id"]
+        out.append(feet)
+    return out
+
+
+def fourlimb_cache_key(holds: list, weights: Weights, feas: Feasibility, morph_scale: float, finish_ids) -> str:
+    """Stable key for precomputed four-limb results (same inputs -> same key)."""
+    import hashlib
+    from dataclasses import astuple
+    payload = json.dumps({"holds": holds, "w": astuple(weights), "f": astuple(feas), "scale": morph_scale,
+                          "finish": sorted(finish_ids)}, sort_keys=True, default=_np)
+    return hashlib.sha1(payload.encode()).hexdigest()[:16]

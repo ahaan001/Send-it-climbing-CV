@@ -160,6 +160,16 @@ def hand_point(frame_landmarks: dict, side: str, min_vis: float = 0.5):
     return (x, y, vis)
 
 
+def foot_point(frame_landmarks: dict, side: str, min_vis: float = 0.5):
+    """Best estimate of the foot contact point for 'LEFT'/'RIGHT': the toe
+    (FOOT_INDEX) when visible, else the ankle."""
+    for name in (f"{side}_FOOT_INDEX", f"{side}_ANKLE"):
+        p = frame_landmarks.get(name)
+        if p is not None and p[2] >= min_vis:
+            return (float(p[0]), float(p[1]), float(p[2]))
+    return None
+
+
 def save_pose(pose: dict, path: str):
     with open(path, "w") as f:
         json.dump(pose, f)
