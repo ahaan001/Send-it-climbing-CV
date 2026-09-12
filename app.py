@@ -23,6 +23,15 @@ from sendit.pipeline import analyze_video, load_analysis, recompute_observed, ru
 from sendit.pose import load_pose
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+# optional .env (LLM keys only; never committed) -- tiny loader, no extra dependency
+_env = os.path.join(ROOT, ".env")
+if os.path.exists(_env):
+    for _line in open(_env):
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            if _v.strip() and _k.strip() not in os.environ:
+                os.environ[_k.strip()] = _v.strip()
 DEMOS = json.load(open(os.path.join(ROOT, "demo_assets", "demos.json")))["demos"]
 DEMO_BY_KEY = {d["key"]: d for d in DEMOS}
 
