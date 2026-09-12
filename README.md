@@ -1,10 +1,10 @@
 # Personalized Climbing Difficulty (HackCMU 2026)
 
 Climbing grades are set by whoever established the route, using their own
-body. A move that's easy for a tall climber can be nearly impossible for a
-shorter one — but no current tool quantifies that gap. This project uses
-phone-camera computer vision to compute a **personalized, reach-adjusted
-difficulty score** for each move, alongside the gym's official grade.
+body. A move that's easy for a tall climber can be nearly impossible and even 
+dangerous for a shorter one, but no current tool quantifies that gap. This 
+project uses phone-camera computer vision to compute a **personalized,
+reach-adjusted difficulty score** for each move, alongside the gym's official grade.
 
 Track: **Multiplayer**
 
@@ -70,7 +70,7 @@ versions (0.10.18+) dropped the legacy `solutions.pose` API this project
 uses in favor of a Tasks API that requires downloading model files from
 `storage.googleapis.com` at runtime.
 
-## Known limitations (honest list for judges)
+## Known limitations 
 
 - **No camera-shake compensation.** Hold detection assumes holds stay in
   the same pixel position across sampled frames. A handheld/shaky camera
@@ -78,7 +78,7 @@ uses in favor of a Tasks API that requires downloading model files from
   + homography alignment) would fix this but isn't implemented yet.
 - **Light-colored walls**: hold/wall detection that relies on finding a
   dark board silhouette doesn't work on light gym walls — `wall_angle.py`
-  now detects this case and returns `None` instead of a bogus number, but
+  now detects this case and returns `None` instead of a random number, but
   doesn't yet have a working fallback for that wall type.
 - **Reach-ratio comparisons across different videos** assume the climbers
   were filmed at a comparable distance from the wall. Within one climber's
