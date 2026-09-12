@@ -200,6 +200,12 @@ def _opt_cached(holds_json, morph_json, placements_json, w_tuple, f_tuple, scale
                             fourlimb=fourlimb, **dict(fl_kwargs))
 
 
+@st.cache_resource(show_spinner=False)
+def _llm_ok() -> bool:
+    from sendit.coach import llm_available
+    return llm_available()
+
+
 def apply_preset(p):
     """on_click callback: mutate session state; Streamlit reruns afterwards (never call st.rerun here)."""
     ss = st.session_state
@@ -657,7 +663,7 @@ with tab_opt:
         st.markdown(f"<span class='opt'><b>Optimized</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
 
         st.markdown("##### Coaching insights")
-        from sendit.coach import rule_based, llm_rewrite, summary_for_llm
+        from sendit.coach import rule_based, llm_rewrite, summary_for_llm, llm_available
         for line in rule_based(R, hid, partial):
             st.markdown(f"- {line}")
         if os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):

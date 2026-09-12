@@ -83,6 +83,21 @@ def summary_for_llm(R: dict, hid: dict, partial: bool) -> dict:
     }
 
 
+def llm_available(timeout: float = 8.0) -> bool:
+    """One cheap probe: is a configured key actually accepted? (Grok: list models; Gemini: list models.)"""
+    try:
+        import requests
+        if os.environ.get("XAI_API_KEY"):
+            r = requests.get("https://api.x.ai/v1/models", headers={"Authorization": f"Bearer {os.environ['XAI_API_KEY']}"}, timeout=timeout)
+            return r.ok
+        if os.environ.get("GEMINI_API_KEY"):
+            r = requests.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": os.environ["GEMINI_API_KEY"]}, timeout=timeout)
+            return r.ok
+    except Exception:
+        return False
+    return False
+
+
 def llm_rewrite(summary: dict, timeout: float = 20.0) -> Optional[str]:
     """Optional. Uses XAI_API_KEY (Grok) or GEMINI_API_KEY if set. Returns None otherwise or on any error."""
     prompt = ("You are a climbing coach. Using ONLY the structured analysis below (do not invent holds or numbers), "

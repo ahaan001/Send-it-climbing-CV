@@ -179,9 +179,10 @@ live run), plus live re-run and upload modes:
 **Three reliability layers.** (1) Live: upload → full pipeline (≈ 20–30 s). (2) Demo: the same pipeline's cached
 output loads instantly and every edit/slider re-optimizes live. (3) Emergency: pre-rendered results
 (`demo_assets/<demo>/comparison.png`, `diff.png`, `graph.png`, `personalize.png`) and browser screenshots
-(`docs/screenshots/`). A 3-minute script (`docs/PRESENTATION.md`), judge Q&A (`docs/JUDGE_QA.md`) and submission blurb
-(`docs/SUBMISSION.md`) are included. `scripts/ui_screenshots.py` drives the running app with Playwright (tabs, hold
-click-select, demo switch, upload) and regenerates the screenshots.
+(`docs/screenshots/`, including presentation mode) and a silent recorded walkthrough (`docs/walkthrough.webm`, made by
+`scripts/record_walkthrough.py`). A 3-minute script (`docs/PRESENTATION.md`), judge Q&A (`docs/JUDGE_QA.md`) and
+submission blurb (`docs/SUBMISSION.md`) are included. `scripts/ui_screenshots.py` drives the running app with
+Playwright (tabs, hold click-select, demo switch, presets, upload) and regenerates the screenshots.
 
 ### Installation
 
@@ -197,9 +198,14 @@ breaks with protobuf ≥ 5. If you install anything else afterwards, re-run `pip
 
 ```bash
 streamlit run app.py                       # UI (loads the cached demos instantly)
-python3 scripts/build_demo_cache.py        # rebuild demo caches + fallback images (--force to recompute CV)
-python3 -m pytest tests -q                 # optimizer sanity tests
+#   http://localhost:8501/?present=1       # presentation mode: hero-first projector layout, one-click demo presets
+python3 scripts/build_demo_cache.py        # rebuild demo caches, four-limb plans + fallback images (--force to recompute CV)
+python3 scripts/benchmark_morphology.py    # 200-route synthetic benchmark -> docs/benchmark_morphology.png
+python3 -m pytest tests -q                 # optimizer + four-limb tests
 ```
+
+**Demo presets** (top of the Optimize tab): *Rate H25 terrible* (re-routes via H20/H29), *Reset ratings*,
+*Simulate 85 % climber* (side-by-side measured vs simulated), *Back to measured*, *Show full-body plan* (hands + feet).
 
 Live processing of a 25 s 1080p-ish phone clip takes ≈ 20 s on a laptop (pose ≈ 9 s, stabilization ≈ 8 s); the
 optimization itself is milliseconds, so every slider, rating and hold edit re-optimizes instantly.
@@ -212,14 +218,16 @@ sendit/
   stabilize.py   ORB+RANSAC homographies → wall coordinates; climber-free median panorama
   holds.py       LED / colour hold detection, hand-dwell hold inference, hold schema
   beta.py        hand–hold contact events → observed placement sequence (+flicker cleanup)
-  optimizer.py   Climber / Weights / Feasibility, move cost, Dijkstra over hand-pair states,
-                 observed-sequence scoring, comparison, crux explanation
+  optimizer.py   Climber / Weights / Feasibility, limb-generic state graph (hands, or hands + feet),
+                 move costs, exact A* with admissible bound + budgeted beam fallback, observed-sequence scoring,
+                 comparison, crux explanation
   viz.py         judge-readable renderings (observed vs optimized, diff, feasibility graph, overlay video)
   coach.py       rule-based coaching insights (+ optional LLM paraphrase, never decides the beta)
   pipeline.py    caching orchestration: analyze_video(), run_optimization()
 app.py           Streamlit UI: Route & holds · Climber · Optimize · Personalize · Method
-tests/           deterministic optimizer tests (grip flips the beta, morphology flips feasibility, comparison math)
-scripts/         build_demo_cache.py
+tests/           deterministic optimizer tests (grip flips the beta, morphology flips feasibility, comparison math,
+                 four-limb feasibility, A* == Dijkstra, beam validity)
+scripts/         build_demo_cache.py · benchmark_morphology.py · ui_screenshots.py · record_walkthrough.py
 src/             original analytics prototype (pose pipeline, LED detector reused; the rest kept for reference)
 ```
 
