@@ -27,6 +27,11 @@ geometric path under our objective so you can see it lose.
 Entering a hold rated `g` adds `w_g·(g−1)/4`. Rating a hold 5 makes a nearby alternative cheaper; in the demo, rating
 one hold terrible visibly re-routes the beta. It's a subjective input, treated as a preference, not ground truth.
 
+**Is the personalization real or cosmetic?**
+Measured: on 200 synthetic routes solved exactly, a 15 % shorter climber gets a different optimal hold set on 70 % of
+routes (sequence differs on 80 %) at a median cost 1.23× the measured climber's; a 10 % taller climber gets a different
+line on 36 %. No route needed envelope relaxation. (`docs/benchmark_morphology.png`, `scripts/benchmark_morphology.py`)
+
 **How does morphology change the result?**
 Every reach term is a ratio to arm span, so the same wall distance costs more for a smaller climber, and edges beyond
 their envelope vanish. In the spray-wall demo, scaling to 85 % reach changes the recommended sequence (extra move via
@@ -50,14 +55,23 @@ No. All quantities are pixel ratios and user ratings. Measured: landmarks, segme
 timing. Computed: costs, paths. Subjective: grip. Simulated: the scaled morphology.
 
 **How do feet factor in?**
-Through a foot-support proxy: a target hand hold is penalized if no hold lies inside the climber's leg window below
-it (0.35–1.25 × torso+leg length vertically, ±0.6 laterally). Foot-only holds can be marked and count for support
-but not for hands.
+Two levels. In the headline hands-only comparison, a target hand hold is penalized if no hold lies inside the
+climber's leg window below it (0.35–1.25 × torso+leg length vertically, ±0.6 laterally). In the full-body plan the
+feet are state variables: each foot must sit inside that window (or cut loose at a cost), foot moves cost travel over
+leg length, and moving a hand with no feet is penalized as a campus move. Observed feet come from toe/ankle landmarks
+and are drawn where detected.
 
-**Why only optimize hands?**
-Full beta is a high-dimensional state space: both hands, both feet, body configuration. In six hours we reduced the
-state to the hand pair, which is a tractable exact search that still captures morphology, grip and pose context. The
-same machinery extends to `(h_L, h_R, f_L, f_R)`; that's the next step, with learned edge costs after it.
+**Why is the headline hands-only if you have a four-limb search?**
+Because the comparison must be apples to apples: hand contacts are detected reliably from video, foot contacts are
+not (smears, small foot chips, occlusion). The four-limb search is real — exact A* over ~40k joint states on the
+spray wall, ~400 on the Kilter route — but comparing its cost to an observed sequence with missing feet would
+overstate the climber's cost. So: hands for the score, four limbs for the plan.
+
+**How big is the four-limb search and is it exact?**
+State = (left hand, right hand, left foot, right foot); ~1,200 feasible hand pairs × ~30 foot options on the spray
+wall ≈ 40k states, ~40k expansions, 14 s in pure Python, exact (A* with an admissible lower bound). Above a threshold
+we switch to a budgeted A* and then a diversity-capped beam search, and the screen says "approximate" with the width.
+Demo results are precomputed; a live re-search after an edit is 14 s exact or 1 s with the beam option (≈ 4 % worse).
 
 **What is the next technical step?**
 Four-limb state, support-polygon feasibility, learned costs from many successful ascents (imitation / inverse RL),

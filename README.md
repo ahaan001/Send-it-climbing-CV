@@ -92,6 +92,27 @@ reported as the **predicted crux** with its cost drivers.
 (reach normalization), the holds (grip ratings), and the number of re-grips. The UI shows the geometric baseline
 scored under our objective for contrast.
 
+### Four-limb mode (hands + feet)
+
+The same graph machinery runs over the full limb state `s = (h_L, h_R, f_L, f_R)` when the *Full-body plan* toggle
+is on (a foot may be `None` = cut loose / smearing):
+
+* **Feet feasibility.** Every placed foot must sit inside the climber's leg window below the hands' midpoint
+  (0.35–1.25 × body-height proxy vertically, ±0.6 laterally, from their measured legs + torso), both feet within
+  1.3 × leg length of each other, evaluated after every move — so rising hands eventually force the feet up.
+  Feet may use any on-route hold, foot-only holds included. Below the lowest holds the feet are assumed to be on
+  the ground (the model cannot see the mat).
+* **Costs.** Hand moves keep the same terms, but the foot-support proxy becomes the actual support deficit after the
+  move, plus a *cut-loose* penalty for moving a hand with the feet off (`w_hang`). Foot moves cost a fixed
+  `w_fmove` + travel / leg length + half the grip penalty + a crossed/matched-feet term.
+* **Search.** The joint space is `hand pairs × foot pairs` (~40k states on the spray-wall demo, ~400 on the Kilter
+  route). Below a size threshold we run exact A* (admissible bound: remaining moves × per-move cost); above it a
+  budgeted A* that falls back to diversity-capped beam search, reported on screen as *approximate* with the beam
+  width. Demo results are precomputed (`scripts/build_demo_cache.py`) so the toggle is instant; a live re-search
+  after an edit takes ~15 s exact or ~1 s with the beam option.
+* **Observed feet** are measured from toe/ankle landmarks and drawn where a foot was on a detected hold; the
+  hands-only observed-vs-optimized numbers remain the headline because foot detection is incomplete on real walls.
+
 ### Human-in-the-loop computer vision
 
 CV is imperfect in arbitrary gyms: dark holds on a dark panel, painted wall features, occlusion, lens perspective.
@@ -125,6 +146,25 @@ more expensive — or infeasible — for a smaller climber. The UI's *Personaliz
 
 *Same route, same holds. Measured climber: 5 moves. Simulated 85 % reach: the optimizer re-routes through H20 and
 H29 (6 moves, cost 9.8 → 11.6). Labelled as a simulation — no second real climber is implied.*
+
+### Does morphology change the beta? (synthetic benchmark)
+
+`scripts/benchmark_morphology.py` generates 200 random routes (7×5 hold grid with jitter, random 1–5 grips, matched
+start at the bottom, finish at the top) and solves each exactly for a climber scaled to 80–110 % of the measured arm
+span and legs. No route needed envelope relaxation, so every comparison is exact-vs-exact under the same objective.
+
+| simulated reach | optimal hold set changed | sequence changed | cost ÷ measured (median, IQR) |
+|---|---|---|---|
+| 80 % | 74 % | 86 % | 1.34 (1.29–1.40) |
+| 85 % | 70 % | 80 % | 1.23 (1.20–1.28) |
+| 90 % | 50 % | 57 % | 1.14 (1.13–1.16) |
+| 110 % | 36 % | 37 % | 0.89 (0.89–0.90) |
+
+![Benchmark](docs/benchmark_morphology.png)
+
+Reading it: shrink the climber by 15 % and the *optimal hold set itself* changes on 70 % of routes while the cost of
+the route rises by ~23 %; even a 10 % taller climber gets a different line on a third of routes. Beta is a property
+of the climber–route pair, which is the premise of the project.
 
 ### Demo
 
@@ -185,8 +225,9 @@ src/             original analytics prototype (pose pipeline, LED detector reuse
 
 ### Limitations (honest scope)
 
-* **Hands only.** The state is the pair of hand holds. Feet and body pose enter only as contextual cost modifiers
-  (foot-support proxy, crossed hands, direction). Explicit four-limb configuration-space optimization is future work.
+* **Hands first.** The headline comparison is the hand-pair state; the four-limb plan adds feet under a simple leg
+  window and is exact only below a state-count threshold (approximate beam search above it, labelled as such).
+  Torso/hip position is not an explicit state variable.
 * **Heuristic objective.** Costs are dimensionless heuristics, not energy, force, fatigue or injury risk. Weights are
   defaults we tuned to produce human-like betas, not fitted parameters.
 * **2D pose.** Landmarks are image-plane; perspective and wall curvature bias distances (a hold near the camera looks
@@ -198,7 +239,7 @@ src/             original analytics prototype (pose pipeline, LED detector reuse
 
 ### Future work
 
-* Full hand **and foot** state (`(h_L, h_R, f_L, f_R)`), support-polygon reasoning, whole-body transition costs.
+* Hip/torso as a state variable, support-polygon reasoning, whole-body transition costs on top of the four-limb graph.
 * **Learned edge costs** from many successful climbs (imitation / inverse RL), replacing hand-tuned weights.
 * 3D pose (multi-view or depth) and metric calibration for cross-video comparison.
 * Gym-scale hold maps and route recommendation by morphology; longitudinal athlete modelling.

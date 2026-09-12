@@ -4,6 +4,7 @@ Run:  streamlit run app.py
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -37,7 +38,24 @@ if os.path.exists(_env):
 DEMOS = json.load(open(os.path.join(ROOT, "demo_assets", "demos.json")))["demos"]
 DEMO_BY_KEY = {d["key"]: d for d in DEMOS}
 
-st.set_page_config(page_title="Send It · Beta Optimizer", page_icon="🧗", layout="wide")
+try:
+    _PRESENT_QP = st.query_params.get("present") == "1"
+except Exception:  # noqa
+    _PRESENT_QP = False
+st.set_page_config(page_title="Send It · Beta Optimizer", page_icon="🧗", layout="wide",
+                   initial_sidebar_state="collapsed" if _PRESENT_QP else "auto")
+
+PRESENT_CSS = """
+<style>
+header[data-testid="stHeader"], [data-testid="stToolbar"], .stDeployButton, footer, #MainMenu {display:none !important;}
+html {font-size: 118%;}
+.metric-card .val {font-size: 2.5rem;}
+.metric-card .lab {font-size: 0.9rem;}
+button[data-baseweb="tab"] p {font-size: 1.25rem !important;}
+.hero-title {font-size: 2.5rem;}
+.block-container {padding-top: 0.6rem;}
+</style>
+"""
 
 st.markdown("""
 <style>
@@ -132,7 +150,7 @@ def ensure_state():
     ss.setdefault("finish_choice", "observed")
     for k, v in {"max_reach": 0.85, "w_reach": 1.0, "w_grip": 0.8, "w_move": 0.35, "w_travel": 0.25, "w_dir": 0.4,
                  "w_cross": 0.5, "w_foot": 0.4, "max_down": 0.2, "match_finish": False, "scale_pct": 85,
-                 "sim_on_opt": False, "show_feet": False, "fast_beam": False}.items():
+                 "sim_on_opt": False, "show_feet": False, "fast_beam": False, "present": _PRESENT_QP}.items():
         ss.setdefault(k, v)
 
 
@@ -283,6 +301,7 @@ ensure_state()
 with st.sidebar:
     st.markdown("## 🧗 Send It")
     st.caption("Personalized climbing beta optimizer")
+    st.toggle("Presentation mode (projector)", key="present", help="Hero-first layout, larger type, no Streamlit chrome. Also: open the app with ?present=1")
     src = st.radio("Source", ["Demo climb", "Upload video"], horizontal=True)
     if src == "Demo climb":
         names = {d["name"]: d["key"] for d in DEMOS}
@@ -329,17 +348,45 @@ ss = st.session_state
 A = ss.analysis
 hid = hid_map()
 bg = ss.bg
+PRESENT = bool(ss.get("present"))
+if PRESENT:
+    st.markdown(PRESENT_CSS, unsafe_allow_html=True)
+
+
+def show_hero(img):
+    """Comparison image; in presentation mode it lives in the left column beside the cards."""
+    st.image(img, width="stretch")
+
+
+def glance_strip(R, q4=None):
+    n_route = sum(1 for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot")
+    srch = (q4 or R["optimized"]).get("search", {})
+    F_ = R["feasibility"]
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        card("State", "(L hand, R hand, L foot, R foot)" if q4 else "(L hand, R hand)",
+             f"{n_route} route holds → ~{srch.get('est_states', 0):,.0f} states")
+    with c2:
+        card("Feasible move", f"span ≤ {F_.max_reach_frac:.2f} × arm span",
+             f"drop ≤ {F_.max_down_frac:.2f} · on-route · feet in leg window" if q4 else f"drop ≤ {F_.max_down_frac:.2f} · on-route · not foot-only")
+    with c3:
+        card("Objective", "reach² + grip + move + …", "normalized to THIS climber's arm span; same function scores the observed beta")
+    with c4:
+        card("Solver", "exact A*" if srch.get("exact", True) else f"beam {srch.get('beam')} (approx.)",
+             f"{srch.get('n_expanded', 0):,} states expanded · {srch.get('runtime_s', 0) * 1000:.0f} ms")
 
 # ----------------------------------------------------------------------------- header
 st.markdown('<p class="hero-title">Send It · Personalized Climbing Beta Optimizer</p>', unsafe_allow_html=True)
-st.markdown('<p class="tagline">Video → pose → holds → <b>your</b> movement-cost graph → minimum-cost beta. '
-            'Here is what you did, what the optimizer recommends, and why.</p>', unsafe_allow_html=True)
+if not PRESENT:
+    st.markdown('<p class="tagline">Video → pose → holds → <b>your</b> movement-cost graph → minimum-cost beta. '
+                'Here is what you did, what the optimizer recommends, and why.</p>', unsafe_allow_html=True)
 pills = [f"{'cached analysis (computed by this pipeline)' if ss.mode == 'cached' else 'live analysis'}",
          f"{A['n_frames']} frames @ {A['fps']:.0f} fps",
          (f"pose in {A['timing']['pose_s']:.1f}s" if A['timing']['pose_s'] > 0.5 else "pose cached"),
          "camera: static" if A["camera"]["static"] else f"camera motion compensated ({A['camera']['max_shift_px']:.0f}px pan)",
          f"holds: {A['hold_method']}" + (" + human-corrected" if ss.curated else "")]
-st.markdown(" ".join(f'<span class="pill">{p}</span>' for p in pills), unsafe_allow_html=True)
+if not PRESENT:
+    st.markdown(" ".join(f'<span class="pill">{p}</span>' for p in pills), unsafe_allow_html=True)
 
 tab_route, tab_climber, tab_opt, tab_person, tab_method = st.tabs(
     ["1 · Route & holds", "2 · Climber", "3 · Optimize", "4 · Personalize", "Method"])
@@ -491,7 +538,7 @@ with tab_climber:
 # ----------------------------------------------------------------------------- tab 3: optimize
 with tab_opt:
     preset_row("opt")
-    top = st.columns([2, 1])
+    top = st.columns([5, 3]) if PRESENT else st.columns([2, 1])
     with top[1]:
         route_hand = [h for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot"]
         finish_opts = ["observed", "top"] + [str(h["id"]) for h in sorted(route_hand, key=lambda h: h["y"])]
@@ -507,10 +554,14 @@ with tab_opt:
         st.stop()
     finish_set = set(R["finish_ids"])
     partial = bool(obs and obs["moves"] and not (set(obs["states"][-1]) & finish_set))
-    with top[0]:
+    with top[1 if PRESENT else 0]:
         if obs and obs["n_moves"] > 0:
             imp = cmp_.get("improvement_frac", 0.0)
-            c1, c2, c3, c4 = st.columns(4)
+            if PRESENT:
+                r1, r2 = st.columns(2), st.columns(2)
+                c1, c2, c3, c4 = r1[0], r1[1], r2[0], r2[1]
+            else:
+                c1, c2, c3, c4 = st.columns(4)
             with c1:
                 card("Observed cost", f"{obs['total_cost']:.2f}", f"{obs['n_moves']} hand moves · max reach {obs['max_reach_frac']:.0%}", "obs")
             with c2:
@@ -531,7 +582,8 @@ with tab_opt:
     if opt.get("relaxed_to"):
         st.warning(f"Graph was disconnected under the envelope; loosened to {opt['relaxed_to']:.2f} × arm span to find a path.")
 
-    st.image(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial), width="stretch")
+    with (top[0] if PRESENT else contextlib.nullcontext()):
+        show_hero(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial))
 
     # ---- simulated-morphology strip (driven by the demo presets / tab 4 slider)
     if ss.sim_on_opt:
@@ -553,10 +605,11 @@ with tab_opt:
     fast_beam = fb2.checkbox("Faster approximate search (beam) when not precomputed", key="fast_beam",
                              help="Exact A* takes ~15-20 s on a dense wall after an edit; beam search is faster but approximate and labelled as such.")
     if show_feet:
-        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1, "fourlimb_beam": 60} if fast_beam else {}
+        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1, "fourlimb_beam": 80} if fast_beam else {}
         with st.spinner("Searching the hands + feet state space…"):
             R4 = optimize(WEIGHTS, FEAS, 1.0, fourlimb=True, fl_kwargs=tuple(sorted(fl_kwargs.items())))
         q = R4.get("optimized_4limb")
+        ss["_q4"] = q
         if q is None:
             st.error("No full-body plan found.")
         else:
@@ -572,8 +625,8 @@ with tab_opt:
             with cq4:
                 card("Hands-only plan", f"{opt['total_cost']:.2f}", "same hand objective without foot terms (not directly comparable)")
             feet_obs = feet_for_result(ss.get("foot_events", []), obs) if obs else None
-            st.image(viz.render_comparison(bg, ss.holds, obs, q, cmp_, ss.box, partial=partial,
-                                           feet_obs=feet_obs, feet_opt=q["feet_by_state"]), width="stretch")
+            show_hero(viz.render_comparison(bg, ss.holds, obs, q, cmp_, ss.box, partial=partial,
+                                            feet_obs=feet_obs, feet_opt=q["feet_by_state"]))
             st.caption("State = (left hand, right hand, left foot, right foot); a move relocates one limb. Feet must sit inside the "
                        "climber's leg window below the hands (0.35–1.25 × body-height proxy) and a foot may cut loose at a cost. "
                        "Mint squares = foot holds with the state numbers in which a foot is on them. Observed feet come from toe/ankle "
@@ -581,50 +634,55 @@ with tab_opt:
             st.markdown(f"<span class='opt'><b>Full-body plan</b></span>: {sequence_text(q, hid)}", unsafe_allow_html=True)
             with st.expander("Full-body plan cost breakdown"):
                 st.plotly_chart(cost_breakdown_chart([q], [viz.C_OPTIMIZED]), width="stretch")
-    if cmp_.get("crux"):
-        st.markdown(f"**Predicted crux (highest-cost move under our model):** {cmp_['crux']['explanation']}")
-    if partial:
-        st.info("The observed sequence stops before the selected finish hold, so the optimized beta is a plan for the full route rather than a like-for-like comparison. Choose 'highest hold the climber reached' as the finish for a direct comparison.")
-    elif obs and cmp_.get("same_sequence"):
-        st.success("The observed beta already matches the optimizer's minimum-cost sequence for this climber.")
-    elif obs and cmp_.get("same_holds"):
-        st.info("Same holds as the observed beta, but with a different hand order.")
-    elif obs:
-        so = ", ".join(f"H{i}" for i in cmp_.get("only_observed", [])) or "none"
-        sp = ", ".join(f"H{i}" for i in cmp_.get("only_optimized", [])) or "none"
-        st.markdown(f"**Difference:** the optimizer drops **{so}** and adds **{sp}**; shared holds: {', '.join(f'H{i}' for i in cmp_.get('shared_holds', []))}.")
+    q4_for_glance = ss.get("_q4") if show_feet else None
+    st.markdown("##### Optimization at a glance")
+    glance_strip(R, q4_for_glance)
+    details_ctx = st.expander("Details: crux, sequences, coaching, cost breakdown, graph", expanded=not PRESENT) if PRESENT else contextlib.nullcontext()
+    with details_ctx:
+        if cmp_.get("crux"):
+            st.markdown(f"**Predicted crux (highest-cost move under our model):** {cmp_['crux']['explanation']}")
+        if partial:
+            st.info("The observed sequence stops before the selected finish hold, so the optimized beta is a plan for the full route rather than a like-for-like comparison. Choose 'highest hold the climber reached' as the finish for a direct comparison.")
+        elif obs and cmp_.get("same_sequence"):
+            st.success("The observed beta already matches the optimizer's minimum-cost sequence for this climber.")
+        elif obs and cmp_.get("same_holds"):
+            st.info("Same holds as the observed beta, but with a different hand order.")
+        elif obs:
+            so = ", ".join(f"H{i}" for i in cmp_.get("only_observed", [])) or "none"
+            sp = ", ".join(f"H{i}" for i in cmp_.get("only_optimized", [])) or "none"
+            st.markdown(f"**Difference:** the optimizer drops **{so}** and adds **{sp}**; shared holds: {', '.join(f'H{i}' for i in cmp_.get('shared_holds', []))}.")
 
-    st.markdown("##### Sequences")
-    st.markdown(f"<span class='obs'><b>Observed</b></span>: {sequence_text(obs, hid)}", unsafe_allow_html=True)
-    st.markdown(f"<span class='opt'><b>Optimized</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
+        st.markdown("##### Sequences")
+        st.markdown(f"<span class='obs'><b>Observed</b></span>: {sequence_text(obs, hid)}", unsafe_allow_html=True)
+        st.markdown(f"<span class='opt'><b>Optimized</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
 
-    st.markdown("##### Coaching insights")
-    from sendit.coach import rule_based, llm_rewrite, summary_for_llm
-    for line in rule_based(R, hid, partial):
-        st.markdown(f"- {line}")
-    if os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
-        if st.button("Explain with LLM (paraphrases the structured result only)"):
-            txt = llm_rewrite(summary_for_llm(R, hid, partial))
-            st.write(txt or "LLM unavailable; showing rule-based insights above.")
-    st.markdown("##### Where the cost comes from")
-    st.plotly_chart(cost_breakdown_chart([obs, opt], [viz.C_OBSERVED, viz.C_OPTIMIZED]), width="stretch")
+        st.markdown("##### Coaching insights")
+        from sendit.coach import rule_based, llm_rewrite, summary_for_llm
+        for line in rule_based(R, hid, partial):
+            st.markdown(f"- {line}")
+        if os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+            if st.button("Explain with LLM (paraphrases the structured result only)"):
+                txt = llm_rewrite(summary_for_llm(R, hid, partial))
+                st.write(txt or "LLM unavailable; showing rule-based insights above.")
+        st.markdown("##### Where the cost comes from")
+        st.plotly_chart(cost_breakdown_chart([obs, opt], [viz.C_OBSERVED, viz.C_OPTIMIZED]), width="stretch")
 
-    e1, e2 = st.columns(2)
-    with e1:
-        with st.expander("Why not just the shortest geometric path?", expanded=False):
-            if geo:
-                st.markdown(f"The pure shortest-distance path (no reach normalization, no grip, no per-move cost) scores **{geo['total_cost']:.2f}** under our objective "
-                            f"vs **{opt['total_cost']:.2f}** for the optimized beta ({geo['n_moves']} vs {opt['n_moves']} moves, max reach {geo['max_reach_frac']:.0%} vs {opt['max_reach_frac']:.0%}).")
-                st.markdown(f"<span style='color:#be78ff'><b>Geometric</b></span>: {sequence_text(geo, hid)}", unsafe_allow_html=True)
-                st.image(viz.render_beta_panel(bg, ss.holds, geo, "Shortest geometric path (baseline)", viz.C_GEOMETRIC, ss.box, crux=False), width="stretch")
-    with e2:
-        with st.expander("Personalized feasibility graph", expanded=False):
-            edges = hold_graph_edges(ss.holds, R["climber"], R["feasibility"])
-            st.image(viz.render_graph(bg, ss.holds, edges, opt, ss.box), width="stretch")
-            st.caption("An edge joins two holds this climber can hold simultaneously (span ≤ reach envelope). "
-                       "The search runs over hand-pair states; each state change moves one hand along one of these edges.")
-    with st.expander("Diff view (both betas on one wall)"):
-        st.image(viz.render_diff(bg, ss.holds, obs, opt, cmp_, ss.box), width="stretch")
+        e1, e2 = st.columns(2)
+        with e1:
+            with st.expander("Why not just the shortest geometric path?", expanded=False):
+                if geo:
+                    st.markdown(f"The pure shortest-distance path (no reach normalization, no grip, no per-move cost) scores **{geo['total_cost']:.2f}** under our objective "
+                                f"vs **{opt['total_cost']:.2f}** for the optimized beta ({geo['n_moves']} vs {opt['n_moves']} moves, max reach {geo['max_reach_frac']:.0%} vs {opt['max_reach_frac']:.0%}).")
+                    st.markdown(f"<span style='color:#be78ff'><b>Geometric</b></span>: {sequence_text(geo, hid)}", unsafe_allow_html=True)
+                    st.image(viz.render_beta_panel(bg, ss.holds, geo, "Shortest geometric path (baseline)", viz.C_GEOMETRIC, ss.box, crux=False), width="stretch")
+        with e2:
+            with st.expander("Personalized feasibility graph", expanded=False):
+                edges = hold_graph_edges(ss.holds, R["climber"], R["feasibility"])
+                st.image(viz.render_graph(bg, ss.holds, edges, opt, ss.box), width="stretch")
+                st.caption("An edge joins two holds this climber can hold simultaneously (span ≤ reach envelope). "
+                           "The search runs over hand-pair states; each state change moves one hand along one of these edges.")
+        with st.expander("Diff view (both betas on one wall)"):
+            st.image(viz.render_diff(bg, ss.holds, obs, opt, cmp_, ss.box), width="stretch")
 
 # ----------------------------------------------------------------------------- tab 4: personalize
 with tab_person:
