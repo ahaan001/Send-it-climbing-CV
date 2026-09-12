@@ -6,7 +6,36 @@
       "video": "demo_assets/skeleton_overlay.mp4",
       "cache": "demo_assets/spraywall/cache",
       "wall_type": "color",
-      "blurb": "25 s boulder on a dense spray wall filmed by hand. Camera motion is compensated with feature-matched homographies so holds and hands live in one wall coordinate frame."
+      "blurb": "25 s boulder on a dense spray wall filmed by hand. Camera motion is compensated with feature-matched homographies so holds and hands live in one wall coordinate frame.",
+      "presets": [
+        {
+          "label": "Rate H25 terrible",
+          "action": "set_grip",
+          "args": {
+            "hold": 25,
+            "grip": 5
+          }
+        },
+        {
+          "label": "Reset ratings",
+          "action": "reset_grips"
+        },
+        {
+          "label": "Simulate 85 % climber",
+          "action": "set_scale",
+          "args": {
+            "pct": 85
+          }
+        },
+        {
+          "label": "Back to measured",
+          "action": "scale_measured"
+        },
+        {
+          "label": "Show full-body plan",
+          "action": "show_feet"
+        }
+      ]
     },
     {
       "key": "kilter",
@@ -15,7 +44,24 @@
       "cache": "demo_assets/kilter/cache",
       "wall_type": "led",
       "blurb": "Lit holds define the route objectively (public CruxCam footage). The clip covers the first move; the optimizer plans the full route to the top hold for the measured climber and for a simulated shorter one.",
-      "default_finish": "top"
+      "default_finish": "top",
+      "presets": [
+        {
+          "label": "Simulate 85 % climber",
+          "action": "set_scale",
+          "args": {
+            "pct": 85
+          }
+        },
+        {
+          "label": "Back to measured",
+          "action": "scale_measured"
+        },
+        {
+          "label": "Show full-body plan",
+          "action": "show_feet"
+        }
+      ]
     }
   ]
 }

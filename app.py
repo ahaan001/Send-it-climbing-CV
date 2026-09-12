@@ -130,6 +130,10 @@ def ensure_state():
     ss.setdefault("last_click", None)
     ss.setdefault("box", None)
     ss.setdefault("finish_choice", "observed")
+    for k, v in {"max_reach": 0.85, "w_reach": 1.0, "w_grip": 0.8, "w_move": 0.35, "w_travel": 0.25, "w_dir": 0.4,
+                 "w_cross": 0.5, "w_foot": 0.4, "max_down": 0.2, "match_finish": False, "scale_pct": 85,
+                 "sim_on_opt": False, "show_feet": False, "fast_beam": False}.items():
+        ss.setdefault(k, v)
 
 
 def set_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
@@ -137,6 +141,8 @@ def set_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
     ss = st.session_state
     ss.analysis, ss.pose_wall, ss.bg = analysis, pose_wall, bg
     ss.holds = [dict(h) for h in holds]
+    ss.holds_baseline = {h["id"]: int(h.get("grip", 3)) for h in holds}
+    ss.sim_on_opt = False
     ss.placements = recompute_observed(analysis, ss.holds, pose_wall) if curated else analysis["placements"]
     ss.foot_events = recompute_feet(analysis, ss.holds, pose_wall) if curated else analysis.get("foot_events", [])
     fl_path = os.path.join(analysis["cache_dir"], "fourlimb.json")
@@ -174,6 +180,39 @@ def _opt_cached(holds_json, morph_json, placements_json, w_tuple, f_tuple, scale
     return run_optimization(holds, json.loads(morph_json), json.loads(placements_json), Weights(*w_tuple),
                             Feasibility(*f_tuple), morph_scale=scale, finish_ids=list(finish_tuple) if finish_tuple else None,
                             fourlimb=fourlimb, **dict(fl_kwargs))
+
+
+def apply_preset(p):
+    """on_click callback: mutate session state; Streamlit reruns afterwards (never call st.rerun here)."""
+    ss = st.session_state
+    a = p.get("args", {})
+    if p["action"] == "set_grip":
+        for h in ss.holds:
+            if h["id"] == a["hold"]:
+                h["grip"] = int(a["grip"])
+                ss.selected = h["id"]
+    elif p["action"] == "reset_grips":
+        for h in ss.holds:
+            h["grip"] = ss.get("holds_baseline", {}).get(h["id"], 3)
+    elif p["action"] == "set_scale":
+        ss.scale_pct = int(a["pct"])
+        ss.sim_on_opt = True
+    elif p["action"] == "scale_measured":
+        ss.sim_on_opt = False
+    elif p["action"] == "show_feet":
+        ss.show_feet = True
+
+
+def preset_row(where: str):
+    ss = st.session_state
+    key = ss.source_key if ss.source_key in DEMO_BY_KEY else None
+    presets = DEMO_BY_KEY[key].get("presets", []) if key else []
+    if not presets:
+        return
+    cols = st.columns(len(presets) + 1)
+    cols[0].markdown("<div style='padding-top:6px;color:#9aa3b2'>Demo moves</div>", unsafe_allow_html=True)
+    for i, p in enumerate(presets):
+        cols[i + 1].button(p["label"], key=f"preset_{where}_{i}", on_click=apply_preset, args=(p,), width="stretch")
 
 
 def optimize(weights, feas, morph_scale=1.0, fourlimb=False, fl_kwargs=()):
@@ -267,18 +306,18 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Optimizer settings")
-    max_reach = st.slider("Reach envelope (max hand-to-hand span, × arm span)", 0.5, 1.1, 0.85, 0.05,
+    max_reach = st.slider("Reach envelope (max hand-to-hand span, × arm span)", 0.5, 1.1, step=0.05, key="max_reach",
                           help="An edge is feasible only if the climber can hold both holds at once. Auto-widened to cover any reach the climber actually performed.")
-    w_reach = st.slider("Reach weight", 0.0, 3.0, 1.0, 0.1, help="(span / 0.4 arm span)² per move")
-    w_grip = st.slider("Grip-quality weight", 0.0, 3.0, 0.8, 0.1, help="(rating−1)/4 of the target hold")
-    w_move = st.slider("Per-move penalty", 0.0, 2.0, 0.35, 0.05, help="Fixed cost of every hand movement")
+    w_reach = st.slider("Reach weight", 0.0, 3.0, step=0.1, key="w_reach", help="(span / 0.4 arm span)² per move")
+    w_grip = st.slider("Grip-quality weight", 0.0, 3.0, step=0.1, key="w_grip", help="(rating−1)/4 of the target hold")
+    w_move = st.slider("Per-move penalty", 0.0, 2.0, step=0.05, key="w_move", help="Fixed cost of every hand movement")
     with st.expander("Advanced terms"):
-        w_travel = st.slider("Travel weight", 0.0, 2.0, 0.25, 0.05)
-        w_dir = st.slider("Sideways / downward weight", 0.0, 2.0, 0.4, 0.05)
-        w_cross = st.slider("Crossed-hands weight", 0.0, 2.0, 0.5, 0.05)
-        w_foot = st.slider("Foot-support weight", 0.0, 2.0, 0.4, 0.05)
-        max_down = st.slider("Max downward move (× arm span)", 0.0, 0.6, 0.2, 0.05)
-        match_finish = st.checkbox("Require both hands on finish", value=False)
+        w_travel = st.slider("Travel weight", 0.0, 2.0, step=0.05, key="w_travel")
+        w_dir = st.slider("Sideways / downward weight", 0.0, 2.0, step=0.05, key="w_dir")
+        w_cross = st.slider("Crossed-hands weight", 0.0, 2.0, step=0.05, key="w_cross")
+        w_foot = st.slider("Foot-support weight", 0.0, 2.0, step=0.05, key="w_foot")
+        max_down = st.slider("Max downward move (× arm span)", 0.0, 0.6, step=0.05, key="max_down")
+        match_finish = st.checkbox("Require both hands on finish", key="match_finish")
     WEIGHTS = Weights(w_reach=w_reach, w_grip=w_grip, w_move=w_move, w_travel=w_travel, w_dir=w_dir, w_cross=w_cross, w_foot=w_foot)
     FEAS = Feasibility(max_reach_frac=max_reach, max_down_frac=max_down, match_finish=match_finish)
 
@@ -451,6 +490,7 @@ with tab_climber:
 
 # ----------------------------------------------------------------------------- tab 3: optimize
 with tab_opt:
+    preset_row("opt")
     top = st.columns([2, 1])
     with top[1]:
         route_hand = [h for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot"]
@@ -493,13 +533,27 @@ with tab_opt:
 
     st.image(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial), width="stretch")
 
+    # ---- simulated-morphology strip (driven by the demo presets / tab 4 slider)
+    if ss.sim_on_opt:
+        Rs = optimize(WEIGHTS, FEAS, ss.scale_pct / 100.0)
+        ps = Rs["optimized"]
+        if ps:
+            same = ps["states"] == opt["states"]
+            diff_h = sorted(set(ps["holds_used"]) ^ set(opt["holds_used"]))
+            st.markdown(f"##### Same route, simulated **{ss.scale_pct} %** reach — "
+                        + ("**different beta**: " + ", ".join(f"H{i}" for i in diff_h) if not same else "same sequence, higher cost")
+                        + f" · cost {opt['total_cost']:.2f} → {ps['total_cost']:.2f} · {opt['n_moves']} → {ps['n_moves']} moves")
+            sc1, sc2 = st.columns(2)
+            sc1.image(viz.render_beta_panel(bg, ss.holds, opt, "MEASURED climber · optimized beta", viz.C_OPTIMIZED, ss.box, crux=False), width="stretch")
+            sc2.image(viz.render_beta_panel(bg, ss.holds, ps, f"SIMULATED {ss.scale_pct} % reach · optimized beta", (255, 120, 200), ss.box, crux=False), width="stretch")
+
     # ---- four-limb (hands + feet) plan, off by default
     fb1, fb2 = st.columns([1, 3])
-    show_feet = fb1.toggle("Full-body plan (hands + feet)", key="show_feet", value=False)
-    fast_beam = fb2.checkbox("Fast approximate search (beam) when not precomputed", key="fast_beam", value=False,
-                             help="Exact A* takes ~15 s on a dense wall; beam search is faster but approximate and labelled as such.")
+    show_feet = fb1.toggle("Full-body plan (hands + feet)", key="show_feet")
+    fast_beam = fb2.checkbox("Faster approximate search (beam) when not precomputed", key="fast_beam",
+                             help="Exact A* takes ~15-20 s on a dense wall after an edit; beam search is faster but approximate and labelled as such.")
     if show_feet:
-        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1} if fast_beam else {}
+        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1, "fourlimb_beam": 60} if fast_beam else {}
         with st.spinner("Searching the hands + feet state space…"):
             R4 = optimize(WEIGHTS, FEAS, 1.0, fourlimb=True, fl_kwargs=tuple(sorted(fl_kwargs.items())))
         q = R4.get("optimized_4limb")
@@ -576,7 +630,8 @@ with tab_opt:
 with tab_person:
     st.markdown("#### Same route, different body")
     st.caption("The climber's measured morphology is scaled to simulate a shorter or taller climber. Every feasible edge and every cost is recomputed; the optimizer re-plans.")
-    scale_pct = st.slider("Simulated effective reach (% of measured)", 70, 125, 85, 5)
+    preset_row("person")
+    scale_pct = st.slider("Simulated effective reach (% of measured)", 70, 125, step=5, key="scale_pct")
     Rm = optimize(WEIGHTS, FEAS, 1.0)
     Rs = optimize(WEIGHTS, FEAS, scale_pct / 100.0)
     pm, ps = Rm["optimized"], Rs["optimized"]
