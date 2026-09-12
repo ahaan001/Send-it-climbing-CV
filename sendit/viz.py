@@ -1,5 +1,6 @@
-"""Judge-readable renderings: holds, observed vs optimized beta, diff view,
-feasibility graph. All drawing is PIL on top of the climber-free wall image.
+"""Judge-readable renderings: holds, your climb vs the suggested climb, a
+diff view, and the reach graph. All drawing is PIL on top of the
+climber-free wall image.
 """
 from __future__ import annotations
 
@@ -11,8 +12,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 # palette (RGB)
-C_OBSERVED = (255, 140, 0)      # orange
-C_OPTIMIZED = (0, 200, 255)     # cyan
+C_OBSERVED = (255, 140, 0)      # orange: your climb
+C_OPTIMIZED = (0, 200, 255)     # blue: suggested climb
 C_GEOMETRIC = (190, 120, 255)   # violet
 C_CRUX = (255, 40, 40)
 C_FEET = (120, 255, 200)        # mint: feet markers
@@ -21,6 +22,13 @@ C_OFF = (150, 150, 150)
 C_START = (80, 255, 120)
 C_FINISH = (255, 230, 60)
 GRIP_COLORS = {1: (60, 200, 90), 2: (150, 210, 70), 3: (240, 200, 60), 4: (250, 140, 50), 5: (230, 60, 60)}
+# fill="role" colours (Kilter-style): start green, foot orange, finish pink, other hand holds blue
+ROLE_COLORS = {"start": (80, 255, 120), "foot": (255, 150, 40), "finish": (255, 90, 200), None: (70, 150, 255)}
+
+# One line the app shows under the comparison image.
+LEGEND_LINE = "Orange = your moves · Blue = suggested · Red = your hardest move"
+# Label on the red arrow (your hardest move).
+CRUX_LABEL = "Hardest"
 
 
 def _font(size: int, bold=True):
@@ -39,6 +47,16 @@ def _font(size: int, bold=True):
             except Exception:
                 continue
     return ImageFont.load_default()
+
+
+def _fit_font(d: ImageDraw.ImageDraw, text: str, max_w: float, size: float, bold=True, min_size: int = 9):
+    """Largest font at or below `size` that keeps `text` within `max_w`."""
+    size = int(size)
+    f = _font(size, bold)
+    while size > min_size and d.textlength(text, font=f) > max_w:
+        size -= 1
+        f = _font(size, bold)
+    return f
 
 
 def to_pil(bgr: np.ndarray) -> Image.Image:
@@ -62,8 +80,49 @@ def _scale(img: Image.Image):
     return max(img.size) / 1000.0
 
 
+def _limit_height(img: Image.Image, max_height: Optional[int]) -> Image.Image:
+    """Downscale (high-quality) so the image is at most max_height tall."""
+    if not max_height or img.height <= max_height:
+        return img
+    sc = max_height / img.height
+    return img.resize((max(1, round(img.width * sc)), int(max_height)), Image.LANCZOS)
+
+
+def _n(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def moves_line(result: Optional[dict]) -> str:
+    """Sub-line for a panel: "5 moves", or "5 hand moves + 3 foot moves" for
+    a hands+feet plan. Empty string when there is no result."""
+    if not result:
+        return ""
+    nh = int(result.get("n_hand_moves", result.get("n_moves", 0)) or 0)
+    nf = int(result.get("n_foot_moves", 0) or 0)
+    if nf:
+        return f"{_n(nh, 'hand move')} + {_n(nf, 'foot move')}"
+    return _n(nh, "move")
+
+
+def _hold_text(h: dict, label_mode: str) -> str:
+    if label_mode == "label":
+        return h.get("label") or f"H{h['id']}"
+    if label_mode == "id":
+        return str(h["id"])
+    return f"{h['id']}·g{h.get('grip', 3)}"
+
+
 def draw_holds(img: Image.Image, holds: list, selected: Optional[int] = None, show_labels=True,
-               dim_off_route=True, radius_px: Optional[float] = None, label_mode="id"):
+               dim_off_route=True, radius_px: Optional[float] = None, label_mode="id",
+               fill="grip", hide_off_route=False):
+    """Hold discs on the wall image.
+
+    fill="grip"  colours by grip quality and adds the start/finish rings (today's look).
+    fill="role"  colours by role: start green, foot orange, finish pink, other hand holds blue.
+    label_mode   "id" -> "7", "label" -> "H7", anything else -> "7·g3".
+    hide_off_route=True skips holds that are not on the route entirely; otherwise
+    dim_off_route draws them as thin grey rings.
+    """
     d = ImageDraw.Draw(img, "RGBA")
     s = _scale(img)
     r = radius_px or 11 * s
@@ -71,19 +130,26 @@ def draw_holds(img: Image.Image, holds: list, selected: Optional[int] = None, sh
     for h in holds:
         x, y = h["x"], h["y"]
         on = h.get("on_route", True)
-        if not on and dim_off_route:
-            d.ellipse([x - r * 0.8, y - r * 0.8, x + r * 0.8, y + r * 0.8], outline=C_OFF + (170,), width=max(1, int(2 * s)))
-            continue
-        col = GRIP_COLORS.get(int(h.get("grip", 3)), GRIP_COLORS[3])
+        if not on:
+            if hide_off_route:
+                continue
+            if dim_off_route:
+                d.ellipse([x - r * 0.8, y - r * 0.8, x + r * 0.8, y + r * 0.8], outline=C_OFF + (170,), width=max(1, int(2 * s)))
+                continue
+        if fill == "role":
+            col = ROLE_COLORS.get(h.get("role"), ROLE_COLORS[None])
+        else:
+            col = GRIP_COLORS.get(int(h.get("grip", 3)), GRIP_COLORS[3])
         d.ellipse([x - r, y - r, x + r, y + r], fill=col + (200,), outline=(255, 255, 255, 230), width=max(1, int(2 * s)))
-        if h.get("role") == "start":
-            d.ellipse([x - r * 1.6, y - r * 1.6, x + r * 1.6, y + r * 1.6], outline=C_START + (255,), width=max(2, int(3 * s)))
-        elif h.get("role") == "finish":
-            d.ellipse([x - r * 1.6, y - r * 1.6, x + r * 1.6, y + r * 1.6], outline=C_FINISH + (255,), width=max(2, int(3 * s)))
+        if fill != "role":
+            if h.get("role") == "start":
+                d.ellipse([x - r * 1.6, y - r * 1.6, x + r * 1.6, y + r * 1.6], outline=C_START + (255,), width=max(2, int(3 * s)))
+            elif h.get("role") == "finish":
+                d.ellipse([x - r * 1.6, y - r * 1.6, x + r * 1.6, y + r * 1.6], outline=C_FINISH + (255,), width=max(2, int(3 * s)))
         if selected is not None and h["id"] == selected:
             d.ellipse([x - r * 2.1, y - r * 2.1, x + r * 2.1, y + r * 2.1], outline=(255, 255, 255, 255), width=max(2, int(3 * s)))
         if show_labels:
-            txt = str(h["id"]) if label_mode == "id" else f"{h['id']}·g{h.get('grip', 3)}"
+            txt = _hold_text(h, label_mode)
             tw = d.textlength(txt, font=f)
             d.rounded_rectangle([x + r * 0.9, y - r * 1.3, x + r * 0.9 + tw + 6 * s, y - r * 1.3 + 15 * s],
                                 radius=3 * s, fill=(0, 0, 0, 150))
@@ -107,10 +173,12 @@ def _arrow(d: ImageDraw.ImageDraw, p0, p1, color, width, s, shorten=0.0):
     d.polygon([tuple(b), tuple(left), tuple(right)], fill=color)
 
 
-def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, number=True, width_mult=1.0):
-    """Arrows for each hand move (from -> to); crux move in red. Foot moves
-    are drawn by draw_feet(), so they are skipped here (numbering counts
-    hand moves only)."""
+def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, number=True, width_mult=1.0,
+              crux_label: str = CRUX_LABEL):
+    """Arrows for each hand move (from -> to), numbered 1L, 2R, ... The
+    hardest move is red and tagged with `crux_label` (set to "" to skip the
+    tag). Foot moves are drawn by draw_feet(), so they are skipped here
+    (numbering counts hand moves only)."""
     if not result or not result.get("moves"):
         return img
     d = ImageDraw.Draw(img, "RGBA")
@@ -137,21 +205,20 @@ def draw_path(img: Image.Image, holds: list, result: dict, color, crux=True, num
             d.rounded_rectangle([mx - tw / 2 - 4 * s, my - 9 * s, mx + tw / 2 + 4 * s, my + 9 * s], radius=4 * s,
                                 fill=col + (230,))
             d.text((mx - tw / 2, my - 8 * s), txt, fill=(0, 0, 0, 255), font=f)
-        if is_crux:
-            lab = "highest-cost move"
+        if is_crux and crux_label:
             fl = _font(int(12 * s))
-            tw = d.textlength(lab, font=fl)
+            tw = d.textlength(crux_label, font=fl)
             d.rounded_rectangle([b["x"] + 14 * s, b["y"] + 8 * s, b["x"] + 14 * s + tw + 8 * s, b["y"] + 8 * s + 16 * s],
                                 radius=3 * s, fill=C_CRUX + (220,))
-            d.text((b["x"] + 18 * s, b["y"] + 9 * s), lab, fill=(255, 255, 255, 255), font=fl)
+            d.text((b["x"] + 18 * s, b["y"] + 9 * s), crux_label, fill=(255, 255, 255, 255), font=fl)
     return img
 
 
 def draw_feet(img: Image.Image, holds: list, feet_by_state, color=C_FEET, hand_states=None, moves=None):
     """Feet layer. feet_by_state: list aligned with states, each [left_foot_id, right_foot_id]
-    (None = not on a hold). Draws hollow squares at every foot hold used, with the
-    state numbers in which that foot was there, and a thin line to the hands'
-    midpoint for the state where the foot is first placed."""
+    (None = not on a hold). Draws a hollow square at every foot hold used,
+    tagged "L foot" / "R foot" / "both feet", and a thin line to the hands'
+    midpoint for the moment the foot is first placed there."""
     if not feet_by_state:
         return img
     d = ImageDraw.Draw(img, "RGBA")
@@ -159,7 +226,7 @@ def draw_feet(img: Image.Image, holds: list, feet_by_state, color=C_FEET, hand_s
     hid = {h["id"]: h for h in holds}
     f = _font(int(11 * s))
     half = 8 * s
-    placed = {}   # (foot_id) -> list of state indices
+    placed = {}   # foot hold id -> sides that used it, in order of first use
     first_seen = {}
     for i, feet in enumerate(feet_by_state):
         if not feet:
@@ -167,15 +234,17 @@ def draw_feet(img: Image.Image, holds: list, feet_by_state, color=C_FEET, hand_s
         for side, fid in zip(("L", "R"), feet):
             if fid is None or fid not in hid:
                 continue
-            placed.setdefault(fid, []).append(f"{i}{side.lower()}")
+            sides = placed.setdefault(fid, [])
+            if side not in sides:
+                sides.append(side)
             if (fid, side) not in first_seen:
                 first_seen[(fid, side)] = i
-    for fid, tags in placed.items():
+    for fid, sides in placed.items():
         h = hid[fid]
         x, y = h["x"], h["y"]
         d.rectangle([x - half, y - half, x + half, y + half], outline=color + (255,), width=max(2, int(2.5 * s)))
         d.rectangle([x - half * 0.55, y - half * 0.55, x + half * 0.55, y + half * 0.55], fill=color + (120,))
-        txt = "f " + ",".join(tags[:3]) + ("…" if len(tags) > 3 else "")
+        txt = "both feet" if len(sides) == 2 else f"{sides[0]} foot"
         tw = d.textlength(txt, font=f)
         d.rounded_rectangle([x + half + 2 * s, y + 2 * s, x + half + 2 * s + tw + 6 * s, y + 2 * s + 13 * s], radius=3 * s, fill=(0, 0, 0, 160))
         d.text((x + half + 5 * s, y + 2 * s), txt, fill=color + (255,), font=f)
@@ -195,68 +264,63 @@ def _title_bar(img: Image.Image, title: str, subtitle: str = "", color=(255, 255
     out = Image.new("RGB", (img.width, img.height + bar_h), (18, 18, 22))
     out.paste(img, (0, bar_h))
     d = ImageDraw.Draw(out)
-    d.text((10 * s, 6 * s), title, fill=color, font=_font(int(20 * s)))
+    pad = 10 * s
+    d.text((pad, 6 * s), title, fill=color, font=_fit_font(d, title, img.width - 2 * pad, 20 * s))
     if subtitle:
-        d.text((10 * s, 30 * s), subtitle, fill=(210, 210, 210), font=_font(int(13 * s), bold=False))
+        d.text((pad, 31 * s), subtitle, fill=(215, 215, 215),
+               font=_fit_font(d, subtitle, img.width - 2 * pad, 14 * s, bold=False))
     return out
 
 
 def render_beta_panel(bg_bgr: np.ndarray, holds: list, result: Optional[dict], title: str, color,
                       box=None, subtitle: str = "", show_labels=True, crux=True, feet=None) -> Image.Image:
-    """feet: optional list aligned with result['states'] of [left_foot, right_foot]
+    """One panel: lit holds (labelled H0, H1, ...), numbered arrows, an
+    optional feet layer, and a title bar. The sub-line defaults to the move
+    count ("5 moves", or "5 hand moves + 3 foot moves").
+    feet: optional list aligned with result['states'] of [left_foot, right_foot]
     hold ids (None = none); for four-limb results pass result['feet_by_state']."""
     img = to_pil(bg_bgr)
-    draw_holds(img, holds, show_labels=show_labels)
+    draw_holds(img, holds, show_labels=show_labels, label_mode="label", hide_off_route=True)
     if feet:
         draw_feet(img, holds, feet, hand_states=result.get("states") if result else None)
     if result:
         draw_path(img, holds, result, color, crux=crux)
     if box:
         img = img.crop(box)
-    if not subtitle and result:
-        nh = result.get("n_hand_moves", result["n_moves"])
-        nf = result.get("n_foot_moves", 0)
-        subtitle = f"cost {result['total_cost']:.2f}  |  {nh} hand moves" + (f" + {nf} foot moves" if nf else "") + f"  |  max reach {result['max_reach_frac']:.0%} of arm span"
-        srch = result.get("search")
-        if srch and result.get("limbs") == "all":
-            subtitle += f"  |  {'exact A*' if srch['exact'] else 'beam ' + str(srch['beam']) + ' (approx.)'}"
+    if not subtitle:
+        subtitle = moves_line(result)
     return _title_bar(img, title, subtitle, color)
 
 
 def render_comparison(bg_bgr: np.ndarray, holds: list, observed: Optional[dict], optimized: Optional[dict],
-                      comparison: dict, box=None, partial: bool = False, feet_obs=None, feet_opt=None) -> Image.Image:
+                      comparison: dict, box=None, partial: bool = False, feet_obs=None, feet_opt=None,
+                      max_height: Optional[int] = None, titles=("Your climb", "Suggested")) -> Image.Image:
+    """Two panels side by side: your climb (orange, hardest move in red) and
+    the suggested climb (blue). Each title bar shows only the title and the
+    move count. `comparison` and `partial` are accepted for existing callers
+    but add no text. When max_height is given the composite is downscaled
+    (high quality) so its height is <= max_height."""
     h_img, w_img = bg_bgr.shape[:2]
     box = box or crop_box(holds, w_img, h_img)
-    left = render_beta_panel(bg_bgr, holds, observed, "OBSERVED beta (from video)" + (" · partial clip" if partial else ""), C_OBSERVED, box, feet=feet_obs)
-    imp = comparison.get("improvement_frac")
-    sub = None
-    fourlimb = bool(optimized and optimized.get("limbs") == "all")
-    if fourlimb:
-        sub = None   # render_beta_panel builds the hand+foot / search-method subtitle
-    elif optimized and partial:
-        sub = f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  max reach {optimized['max_reach_frac']:.0%}  |  full-route plan"
-    elif optimized and imp is not None:
-        sub = (f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  "
-               f"max reach {optimized['max_reach_frac']:.0%}  |  {imp:+.0%} vs observed" if imp != 0 else
-               f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  same as observed")
-    right = render_beta_panel(bg_bgr, holds, optimized,
-                              "FULL-BODY plan (hands + feet, min-cost search)" if fourlimb else "OPTIMIZED beta (min-cost search)",
-                              C_OPTIMIZED, box, subtitle=sub or "", crux=False, feet=feet_opt)
+    t_obs, t_opt = titles
+    left = render_beta_panel(bg_bgr, holds, observed, t_obs, C_OBSERVED, box,
+                             subtitle=moves_line(observed) or "No moves found", crux=True, feet=feet_obs)
+    right = render_beta_panel(bg_bgr, holds, optimized, t_opt, C_OPTIMIZED, box,
+                              subtitle=moves_line(optimized) or "No moves found", crux=False, feet=feet_opt)
     gap = 12
     out = Image.new("RGB", (left.width + right.width + gap, max(left.height, right.height)), (18, 18, 22))
     out.paste(left, (0, 0))
     out.paste(right, (left.width + gap, 0))
-    return out
+    return _limit_height(out, max_height)
 
 
 def render_diff(bg_bgr: np.ndarray, holds: list, observed: Optional[dict], optimized: Optional[dict],
                 comparison: dict, box=None) -> Image.Image:
-    """Both paths on one image; holds coloured by who uses them."""
+    """Both climbs on one image; holds coloured by who uses them."""
     img = to_pil(bg_bgr)
     d = ImageDraw.Draw(img, "RGBA")
     s = _scale(img)
     r = 11 * s
-    hid = {h["id"]: h for h in holds}
     shared = set(comparison.get("shared_holds", []))
     only_o = set(comparison.get("only_observed", []))
     only_p = set(comparison.get("only_optimized", []))
@@ -279,14 +343,14 @@ def render_diff(bg_bgr: np.ndarray, holds: list, observed: Optional[dict], optim
         draw_path(img, holds, optimized, C_OPTIMIZED, crux=False, number=False, width_mult=1.1)
     if box:
         img = img.crop(box)
-    legend = "white = both   orange = observed only   cyan = optimized only   red arrow = highest-cost observed move"
-    return _title_bar(img, "Observed vs optimized", legend)
+    legend = "White = both · Orange = your climb only · Blue = suggested only · Red arrow = your hardest move"
+    return _title_bar(img, "Your climb vs suggested", legend)
 
 
 def render_graph(bg_bgr: np.ndarray, holds: list, edges: list, path: Optional[dict] = None, box=None,
                  title="Personalized feasibility graph") -> Image.Image:
     """Hold-level graph: an edge means this climber can hold both holds at
-    once (span within their reach envelope). Line brightness ~ closeness."""
+    once (span within their reach). Line brightness ~ closeness."""
     img = to_pil(bg_bgr)
     d = ImageDraw.Draw(img, "RGBA")
     s = _scale(img)
@@ -350,10 +414,16 @@ def render_pose_overlay_video(video_path: str, pose: dict, out_path: str, holds:
 
 
 def contact_sheet(video_path: str, pose: dict, placements: list, holds: list, n: int = 6, max_side=360,
-                  holds_for_frame=None) -> Image.Image:
-    """Key frames at each observed hand placement, with skeleton + the hold."""
+                  holds_for_frame=None, fps: Optional[float] = None) -> Image.Image:
+    """Key frames at evenly spaced hand placements (always including the
+    first and last), with the skeleton and the hold circled. Tile caption:
+    "L -> H4 at 0.6 s" (or "L -> H4 frame 18" when fps is None)."""
     hid = {h["id"]: h for h in holds}
-    picks = placements[:: max(1, len(placements) // n)][:n] if placements else []
+    if placements:
+        idx = np.unique(np.linspace(0, len(placements) - 1, min(n, len(placements))).round().astype(int))
+        picks = [placements[int(i)] for i in idx]
+    else:
+        picks = []
     cap = cv2.VideoCapture(video_path)
     tiles = []
     for p in picks:
@@ -365,13 +435,15 @@ def contact_sheet(video_path: str, pose: dict, placements: list, holds: list, n:
         if lm:
             fr = pose_overlay_frame(fr, lm)
         hh = hid.get(p["hold_id"])
+        name = (hh or {}).get("label") or f"H{p['hold_id']}"
         if hh and holds_for_frame:
             hh = {x["id"]: x for x in holds_for_frame(int(p["frame"]))}.get(p["hold_id"], hh)
         if hh:
             cv2.circle(fr, (int(hh["x"]), int(hh["y"])), 18, (0, 140, 255), 4, cv2.LINE_AA)
         sc = max_side / max(fr.shape[:2])
         fr = cv2.resize(fr, (int(fr.shape[1] * sc), int(fr.shape[0] * sc)))
-        cv2.putText(fr, f"{'L' if p['hand']=='LEFT' else 'R'} -> hold {p['hold_id']}  f{p['frame']}", (8, 22),
+        when = f"at {int(p['frame']) / fps:.1f} s" if fps else f"frame {int(p['frame'])}"
+        cv2.putText(fr, f"{'L' if p['hand'] == 'LEFT' else 'R'} -> {name} {when}", (8, 22),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
         tiles.append(fr)
     cap.release()
