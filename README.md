@@ -65,10 +65,11 @@ angle diagram, limiting-factor breakdown, and a `report.json` /
 pip install -r requirements.txt
 ```
 
-Note: this pins `mediapipe==0.10.14` deliberately — newer mediapipe
-versions (0.10.18+) dropped the legacy `solutions.pose` API this project
-uses in favor of a Tasks API that requires downloading model files from
-`storage.googleapis.com` at runtime.
+Note: this project uses an older version of a face/body-tracking library 
+(MediaPipe) on purpose. The old version works instantly, no internet needed o
+nce installed. Newer versions changed how they work; you need to download extra 
+files from Google's servers the first time you run the code.
+
 
 ## Known limitations 
 
