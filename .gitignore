@@ -6,3 +6,6 @@ demo_output*/
 *.avi
 venv/
 .venv/
+.env
+demo_output/
+*.log

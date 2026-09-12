@@ -178,3 +178,20 @@ def save(stab: dict, path: str):
 def load(path: str) -> dict:
     with open(path) as f:
         return json.load(f)
+
+
+def holds_in_frame(holds: list, stab: dict, T, frame_idx: int):
+    """Map wall-coordinate holds back into the pixel frame of one video frame
+    (inverse of T @ H[frame]). Used to draw holds that 'stick' to the wall
+    while the camera pans."""
+    H = np.asarray(T, np.float64) @ np.array(stab["H"][int(frame_idx)], np.float64)
+    Hinv = np.linalg.inv(H)
+    if not holds:
+        return []
+    pts = warp_points(Hinv, [(h["x"], h["y"]) for h in holds])
+    out = []
+    for h, (x, y) in zip(holds, pts):
+        hh = dict(h)
+        hh["x"], hh["y"] = float(x), float(y)
+        out.append(hh)
+    return out

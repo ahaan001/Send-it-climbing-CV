@@ -126,7 +126,7 @@ def set_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
     ss.selected, ss.last_click = None, None
     ss.box = viz.crop_box(ss.holds, bg.shape[1], bg.shape[0])
     ss.source_key = demo_key or upload_path
-    ss.finish_choice = "observed"
+    ss.finish_choice = DEMO_BY_KEY[demo_key].get("default_finish", "observed") if demo_key else "observed"
 
 
 def hid_map():
@@ -268,8 +268,10 @@ with tab_route:
         click = streamlit_image_coordinates(img, key="hold_canvas", width=disp_w)
         if click and click != ss.last_click:
             ss.last_click = click
-            cx = box[0] + click["x"] / scale
-            cy = box[1] + click["y"] / scale
+            shown_w = click.get("width") or disp_w   # component reports the rendered size when available
+            sc_click = shown_w / img.width
+            cx = box[0] + click["x"] / sc_click
+            cy = box[1] + click["y"] / sc_click
             dists = [(np.hypot(h["x"] - cx, h["y"] - cy), h["id"]) for h in ss.holds]
             nearest = min(dists)[1] if dists else None
             near_enough = dists and min(dists)[0] < 0.08 * A["morphology"]["arm_span_px"]
@@ -365,8 +367,14 @@ with tab_climber:
             st.dataframe(pd.DataFrame(rows), hide_index=True, height=min(400, 40 + 35 * len(rows)), width="stretch")
         else:
             st.warning("No hand contacts found with the current hold set. Add holds where the climber's hands were, or lower the reach envelope.")
-        sheet = viz.contact_sheet(A["video"], load_pose(os.path.join(A["cache_dir"], "pose.json")) if os.path.exists(os.path.join(A["cache_dir"], "pose.json")) else ss.pose_wall,
-                                  [p for p in A["placements"]], A["holds"], n=5) if A["placements"] and A["camera"]["static"] else None
+        sheet = None
+        if ss.placements and os.path.exists(os.path.join(A["cache_dir"], "pose.json")) and os.path.exists(os.path.join(A["cache_dir"], "stab.json")):
+            from sendit import stabilize as _stab
+            stab = _stab.load(os.path.join(A["cache_dir"], "stab.json"))
+            if stab["static"]:
+                stab = {**stab, "H": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]] * len(stab["H"])}
+            mapper = lambda i, _s=stab: _stab.holds_in_frame(ss.holds, _s, A["T"], i)
+            sheet = viz.contact_sheet(A["video"], load_pose(os.path.join(A["cache_dir"], "pose.json")), ss.placements, ss.holds, n=5, holds_for_frame=mapper)
         if sheet is not None:
             st.image(sheet, caption="Key frames at auto-detected placements (original camera frame)", width="stretch")
     ctx = A.get("move_context") or []
@@ -392,6 +400,8 @@ with tab_opt:
     if opt is None:
         st.error("No feasible beta found even after relaxing the reach envelope. Check start/finish roles and route membership.")
         st.stop()
+    finish_set = set(R["finish_ids"])
+    partial = bool(obs and obs["moves"] and not (set(obs["states"][-1]) & finish_set))
     with top[0]:
         if obs and obs["n_moves"] > 0:
             imp = cmp_.get("improvement_frac", 0.0)
@@ -401,7 +411,10 @@ with tab_opt:
             with c2:
                 card("Optimized cost", f"{opt['total_cost']:.2f}", f"{opt['n_moves']} hand moves · max reach {opt['max_reach_frac']:.0%}", "opt")
             with c3:
-                card("Cost reduction", f"{imp:+.0%}" if not cmp_.get("same_sequence") else "0%", "(observed − optimized) ÷ observed, same objective")
+                if partial:
+                    card("Cost reduction", "n/a", "clip ends before the finish: optimizer plans the rest of the route")
+                else:
+                    card("Cost reduction", f"{imp:+.0%}" if not cmp_.get("same_sequence") else "0%", "(observed − optimized) ÷ observed, same objective")
             with c4:
                 cx = cmp_.get("crux")
                 card("Highest-cost observed move", f"{cx['cost']:.2f}" if cx else "—",
@@ -413,10 +426,12 @@ with tab_opt:
     if opt.get("relaxed_to"):
         st.warning(f"Graph was disconnected under the envelope; loosened to {opt['relaxed_to']:.2f} × arm span to find a path.")
 
-    st.image(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box), width="stretch")
+    st.image(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial), width="stretch")
     if cmp_.get("crux"):
         st.markdown(f"**Predicted crux (highest-cost move under our model):** {cmp_['crux']['explanation']}")
-    if obs and cmp_.get("same_sequence"):
+    if partial:
+        st.info("The observed sequence stops before the selected finish hold, so the optimized beta is a plan for the full route rather than a like-for-like comparison. Choose 'highest hold the climber reached' as the finish for a direct comparison.")
+    elif obs and cmp_.get("same_sequence"):
         st.success("The observed beta already matches the optimizer's minimum-cost sequence for this climber.")
     elif obs and cmp_.get("same_holds"):
         st.info("Same holds as the observed beta, but with a different hand order.")
@@ -429,6 +444,14 @@ with tab_opt:
     st.markdown(f"<span class='obs'><b>Observed</b></span>: {sequence_text(obs, hid)}", unsafe_allow_html=True)
     st.markdown(f"<span class='opt'><b>Optimized</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
 
+    st.markdown("##### Coaching insights")
+    from sendit.coach import rule_based, llm_rewrite, summary_for_llm
+    for line in rule_based(R, hid, partial):
+        st.markdown(f"- {line}")
+    if os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+        if st.button("Explain with LLM (paraphrases the structured result only)"):
+            txt = llm_rewrite(summary_for_llm(R, hid, partial))
+            st.write(txt or "LLM unavailable; showing rule-based insights above.")
     st.markdown("##### Where the cost comes from")
     st.plotly_chart(cost_breakdown_chart([obs, opt], [viz.C_OBSERVED, viz.C_OPTIMIZED]), width="stretch")
 
@@ -487,7 +510,7 @@ with tab_person:
             if rr:
                 rows.append({"reach %": pct, "optimized cost": round(rr["total_cost"], 2), "moves": rr["n_moves"],
                              "max reach": f"{rr['max_reach_frac']:.0%}", "holds": " ".join(f"H{i}" for i in rr["holds_used"]),
-                             "envelope relaxed": rr["relaxed_to"] or ""})
+                             "envelope relaxed": (f"{rr['relaxed_to']:.2f}" if rr["relaxed_to"] else "")})
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     else:
         st.error("Could not compute a beta for one of the climbers.")

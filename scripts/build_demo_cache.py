@@ -26,6 +26,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--only", default=None)
+    ap.add_argument("--video", action="store_true", help="re-render overlay videos")
     args = ap.parse_args()
     demos = json.load(open(os.path.join(ROOT, "demo_assets", "demos.json")))["demos"]
     for d in demos:
@@ -39,10 +40,6 @@ def main():
         print(f"   pose {a['timing']['pose_s']:.1f}s  total {a['timing']['total_s']:.1f}s  holds {len(a['holds'])}  placements {len(a['placements'])}")
         pose = load_pose(os.path.join(cache, "pose.json"))
         pose_wall = load_pose(os.path.join(cache, "pose_wall.json"))
-        ov = os.path.join(cache, "overlay.mp4")
-        if args.force or not os.path.exists(ov):
-            viz.render_pose_overlay_video(video, pose, ov)
-            print("   overlay video ->", ov)
         holds = a["holds"]
         cur = os.path.join(cache, "holds_edited.json")
         if os.path.exists(cur):
@@ -51,6 +48,15 @@ def main():
             print(f"   using curated holds ({len(holds)}), placements {len(placements)}")
         else:
             placements = a["placements"]
+        ov = os.path.join(cache, "overlay.mp4")
+        if args.force or not os.path.exists(ov) or args.video:
+            from sendit import stabilize
+            stab = stabilize.load(os.path.join(cache, "stab.json"))
+            if stab["static"]:
+                stab = {**stab, "H": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]] * len(stab["H"])}
+            T = a["T"]
+            viz.render_pose_overlay_video(video, pose, ov, holds_for_frame=lambda i: stabilize.holds_in_frame(holds, stab, T, i))
+            print("   overlay video ->", ov)
         bg = cv2.imread(os.path.join(cache, "background.png"))
         box = viz.crop_box(holds, bg.shape[1], bg.shape[0])
         R = run_optimization(holds, a["morphology"], placements)

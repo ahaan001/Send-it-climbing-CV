@@ -44,14 +44,14 @@ def to_pil(bgr: np.ndarray) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
 
 
-def crop_box(holds: list, w: int, h: int, margin_frac: float = 0.18):
+def crop_box(holds: list, w: int, h: int, margin_frac: float = 0.08):
     """Bounding box around the route holds (+margin) so panels focus on the wall."""
     pts = [(hh["x"], hh["y"]) for hh in holds if hh.get("on_route", True)] or [(hh["x"], hh["y"]) for hh in holds]
     if not pts:
         return (0, 0, w, h)
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     bw, bh = max(xs) - min(xs), max(ys) - min(ys)
-    m = max(bw, bh) * margin_frac + 0.06 * max(w, h)
+    m = max(bw, bh) * margin_frac + 0.03 * max(w, h)
     x0, y0 = max(0, int(min(xs) - m)), max(0, int(min(ys) - m))
     x1, y1 = min(w, int(max(xs) + m)), min(h, int(max(ys) + m))
     return (x0, y0, x1, y1)
@@ -165,13 +165,15 @@ def render_beta_panel(bg_bgr: np.ndarray, holds: list, result: Optional[dict], t
 
 
 def render_comparison(bg_bgr: np.ndarray, holds: list, observed: Optional[dict], optimized: Optional[dict],
-                      comparison: dict, box=None) -> Image.Image:
+                      comparison: dict, box=None, partial: bool = False) -> Image.Image:
     h_img, w_img = bg_bgr.shape[:2]
     box = box or crop_box(holds, w_img, h_img)
-    left = render_beta_panel(bg_bgr, holds, observed, "OBSERVED beta (from video)", C_OBSERVED, box)
+    left = render_beta_panel(bg_bgr, holds, observed, "OBSERVED beta (from video)" + (" · partial clip" if partial else ""), C_OBSERVED, box)
     imp = comparison.get("improvement_frac")
     sub = None
-    if optimized and imp is not None:
+    if optimized and partial:
+        sub = f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  max reach {optimized['max_reach_frac']:.0%}  |  full-route plan"
+    elif optimized and imp is not None:
         sub = (f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  "
                f"max reach {optimized['max_reach_frac']:.0%}  |  {imp:+.0%} vs observed" if imp != 0 else
                f"cost {optimized['total_cost']:.2f}  |  {optimized['n_moves']} hand moves  |  same as observed")
@@ -253,8 +255,10 @@ def pose_overlay_frame(frame_bgr: np.ndarray, landmarks: dict, color=(0, 255, 18
 
 
 def render_pose_overlay_video(video_path: str, pose: dict, out_path: str, holds: Optional[list] = None,
-                              max_side: int = 720, fps_out: Optional[float] = None):
-    """Skeleton overlay video (mp4, H.264-agnostic mp4v) downscaled for the UI."""
+                              max_side: int = 720, fps_out: Optional[float] = None, holds_for_frame=None):
+    """Skeleton overlay video (H.264 'avc1', browser-playable) downscaled for
+    the UI. holds_for_frame(frame_idx) -> holds in that frame's pixel space
+    lets route holds stick to the wall while the camera pans."""
     cap = cv2.VideoCapture(video_path)
     w, h = int(cap.get(3)), int(cap.get(4))
     fps = fps_out or (cap.get(5) or 30)
@@ -269,10 +273,12 @@ def render_pose_overlay_video(video_path: str, pose: dict, out_path: str, holds:
         lm = pose["frames"].get(i)
         if lm:
             fr = pose_overlay_frame(fr, lm)
-        if holds:
-            for hh in holds:
-                if hh.get("on_route", True):
-                    cv2.circle(fr, (int(hh["x"]), int(hh["y"])), 12, (0, 200, 255), 2, cv2.LINE_AA)
+        hs = holds_for_frame(i) if holds_for_frame else holds
+        if hs:
+            for hh in hs:
+                if hh.get("on_route", True) and 0 <= hh["x"] < w and 0 <= hh["y"] < h:
+                    col = (80, 255, 120) if hh.get("role") == "start" else (60, 230, 255) if hh.get("role") == "finish" else (0, 200, 255)
+                    cv2.circle(fr, (int(hh["x"]), int(hh["y"])), 12, col, 2, cv2.LINE_AA)
         writer.write(cv2.resize(fr, (ow, oh)))
         i += 1
     cap.release()
@@ -280,7 +286,8 @@ def render_pose_overlay_video(video_path: str, pose: dict, out_path: str, holds:
     return out_path
 
 
-def contact_sheet(video_path: str, pose: dict, placements: list, holds: list, n: int = 6, max_side=360) -> Image.Image:
+def contact_sheet(video_path: str, pose: dict, placements: list, holds: list, n: int = 6, max_side=360,
+                  holds_for_frame=None) -> Image.Image:
     """Key frames at each observed hand placement, with skeleton + the hold."""
     hid = {h["id"]: h for h in holds}
     picks = placements[:: max(1, len(placements) // n)][:n] if placements else []
@@ -295,6 +302,8 @@ def contact_sheet(video_path: str, pose: dict, placements: list, holds: list, n:
         if lm:
             fr = pose_overlay_frame(fr, lm)
         hh = hid.get(p["hold_id"])
+        if hh and holds_for_frame:
+            hh = {x["id"]: x for x in holds_for_frame(int(p["frame"]))}.get(p["hold_id"], hh)
         if hh:
             cv2.circle(fr, (int(hh["x"]), int(hh["y"])), 18, (0, 140, 255), 4, cv2.LINE_AA)
         sc = max_side / max(fr.shape[:2])

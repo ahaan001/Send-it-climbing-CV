@@ -11,10 +11,11 @@
     {
       "key": "kilter",
       "name": "Kilter-style LED board (static camera)",
-      "video": "demo_assets/kilter/kilter_climb.avi",
+      "video": "demo_assets/kilter/kilter_climb.mp4",
       "cache": "demo_assets/kilter/cache",
       "wall_type": "led",
-      "blurb": "Lit holds define the route objectively. Footage from the public CruxCam dataset."
+      "blurb": "Lit holds define the route objectively (public CruxCam footage). The clip covers the first move; the optimizer plans the full route to the top hold for the measured climber and for a simulated shorter one.",
+      "default_finish": "top"
     }
   ]
 }

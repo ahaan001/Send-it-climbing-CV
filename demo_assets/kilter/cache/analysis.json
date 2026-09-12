@@ -1,8 +1,8 @@
 {
- "video": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/kilter_climb.avi",
+ "video": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/kilter_climb.mp4",
  "w": 1080,
  "h": 1920,
- "fps": 30.07915567282322,
+ "fps": 30.08,
  "n_frames": 133,
  "canvas_w": 1080,
  "canvas_h": 1920,
@@ -25,31 +25,31 @@
  ],
  "camera": {
   "static": true,
-  "max_shift_px": 14.69301986694336,
+  "max_shift_px": 14.672018051147461,
   "ref_idx": 66
  },
  "timing": {
-  "pose_s": 0.0005478858947753906,
-  "stabilize_s": 0.008170843124389648,
-  "total_s": 0.8748059272766113
+  "pose_s": 1.9803776741027832,
+  "stabilize_s": 1.8468048572540283,
+  "total_s": 6.28551173210144
  },
  "morphology": {
-  "arm_span_px": 418.0024865939927,
-  "shoulder_width_px": 95.64878011856204,
-  "upper_arm_px": 70.2816999888866,
-  "forearm_px": 69.35022334645905,
-  "hand_px": 21.5449299023697,
-  "torso_px": 152.5920092313214,
-  "thigh_px": 113.90936184074312,
-  "shin_px": 94.08711889778353,
-  "leg_len_px": 207.99648073852666,
-  "height_proxy_px": 360.58848996984807,
-  "n_pose_frames": 130,
-  "pose_detection_rate": 0.9774436090225563,
+  "arm_span_px": 417.83403401119506,
+  "shoulder_width_px": 96.43426630251903,
+  "upper_arm_px": 69.79635952280583,
+  "forearm_px": 68.43097525718446,
+  "hand_px": 22.47254907434774,
+  "torso_px": 153.09799508291619,
+  "thigh_px": 113.43345082435049,
+  "shin_px": 92.32806719350961,
+  "leg_len_px": 205.7615180178601,
+  "height_proxy_px": 358.8595131007763,
+  "n_pose_frames": 121,
+  "pose_detection_rate": 0.9097744360902256,
   "ratios": {
-   "arm_span_over_height_proxy": 1.1592230429455626,
-   "forearm_over_upper_arm": 0.9867465265840917,
-   "leg_over_arm_span": 0.4975962761210901
+   "arm_span_over_height_proxy": 1.1643387419239386,
+   "forearm_over_upper_arm": 0.9804376005431167,
+   "leg_over_arm_span": 0.49244796083879355
   }
  },
  "hold_method": "led",
@@ -57,32 +57,32 @@
  "holds": [
   {
    "id": 0,
-   "x": 851.9060668945312,
-   "y": 1141.6700439453125,
+   "x": 851.9691162109375,
+   "y": 1141.4608154296875,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H0",
    "hits": 25,
-   "hue": 84
+   "hue": 83
   },
   {
    "id": 1,
-   "x": 812.4730834960938,
-   "y": 1070.6917724609375,
+   "x": 812.5487670898438,
+   "y": 1070.5443115234375,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H1",
    "hits": 25,
-   "hue": 94
+   "hue": 93
   },
   {
    "id": 2,
-   "x": 670.18896484375,
-   "y": 930.6226196289062,
+   "x": 670.585693359375,
+   "y": 930.5269165039062,
    "grip": 3,
    "on_route": true,
    "role": "start",
@@ -93,32 +93,32 @@
   },
   {
    "id": 3,
-   "x": 205.41241455078125,
-   "y": 691.1556396484375,
+   "x": 205.4481964111328,
+   "y": 691.1444702148438,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H3",
    "hits": 25,
-   "hue": 98
+   "hue": 96
   },
   {
    "id": 4,
-   "x": 565.0969848632812,
-   "y": 672.5640869140625,
+   "x": 563.5086059570312,
+   "y": 671.88818359375,
    "grip": 3,
    "on_route": true,
    "role": "finish",
    "source": "led",
    "label": "H4",
    "hits": 25,
-   "hue": 87
+   "hue": 85
   },
   {
    "id": 5,
-   "x": 398.7355651855469,
-   "y": 624.7819213867188,
+   "x": 398.97412109375,
+   "y": 624.7816772460938,
    "grip": 3,
    "on_route": true,
    "role": null,
@@ -129,32 +129,32 @@
   },
   {
    "id": 6,
-   "x": 614.4635620117188,
-   "y": 606.606689453125,
+   "x": 614.464111328125,
+   "y": 606.609375,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H6",
    "hits": 25,
-   "hue": 104
+   "hue": 100
   },
   {
    "id": 7,
-   "x": 338.7571716308594,
-   "y": 564.930908203125,
+   "x": 338.7560119628906,
+   "y": 564.9012451171875,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H7",
    "hits": 25,
-   "hue": 102
+   "hue": 101
   },
   {
    "id": 8,
-   "x": 116.2509994506836,
-   "y": 519.6970825195312,
+   "x": 116.27145385742188,
+   "y": 519.6593627929688,
    "grip": 3,
    "on_route": true,
    "role": null,
@@ -165,32 +165,32 @@
   },
   {
    "id": 9,
-   "x": 472.624267578125,
-   "y": 935.74169921875,
+   "x": 472.7278137207031,
+   "y": 935.3207397460938,
    "grip": 3,
    "on_route": true,
    "role": "start",
    "source": "led",
    "label": "H9",
    "hits": 21,
-   "hue": 13
+   "hue": 14
   },
   {
    "id": 10,
-   "x": 681.7999267578125,
-   "y": 1059.159912109375,
+   "x": 681.6533813476562,
+   "y": 1059.542236328125,
    "grip": 3,
    "on_route": true,
    "role": null,
    "source": "led",
    "label": "H10",
    "hits": 15,
-   "hue": 79
+   "hue": 78
   },
   {
    "id": 11,
-   "x": 593.2322998046875,
-   "y": 1036.0086669921875,
+   "x": 593.2188110351562,
+   "y": 1035.9215087890625,
    "grip": 3,
    "on_route": true,
    "role": null,
@@ -204,23 +204,16 @@
   {
    "hand": "LEFT",
    "hold_id": 9,
-   "start": 4,
-   "end": 79,
-   "frames": 76
+   "start": 18,
+   "end": 118,
+   "frames": 101
   },
   {
    "hand": "RIGHT",
    "hold_id": 2,
-   "start": 4,
+   "start": 18,
    "end": 87,
-   "frames": 84
-  },
-  {
-   "hand": "LEFT",
-   "hold_id": 9,
-   "start": 81,
-   "end": 118,
-   "frames": 38
+   "frames": 70
   },
   {
    "hand": "RIGHT",
@@ -234,13 +227,13 @@
   {
    "hand": "LEFT",
    "hold_id": 9,
-   "frame": 4,
-   "end": 79
+   "frame": 18,
+   "end": 118
   },
   {
    "hand": "RIGHT",
    "hold_id": 2,
-   "frame": 4,
+   "frame": 18,
    "end": 87
   },
   {
@@ -252,16 +245,16 @@
  ],
  "move_context": [
   {
-   "support_elbow_min_deg": 156.75592577630636,
-   "support_elbow_mean_deg": 156.75592577630636,
+   "support_elbow_min_deg": 168.66619274927814,
+   "support_elbow_mean_deg": 168.66619274927814,
    "hip_travel_px": 0.0,
    "duration_frames": 0
   },
   {
-   "support_elbow_min_deg": 6.6527852960617615,
-   "support_elbow_mean_deg": 145.03234863304496,
-   "hip_travel_px": 329.15209644927774,
-   "duration_frames": 90
+   "support_elbow_min_deg": 77.67191607295699,
+   "support_elbow_mean_deg": 143.95899437363028,
+   "hip_travel_px": 236.8910898139794,
+   "duration_frames": 76
   }
  ],
  "settings": {
