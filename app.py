@@ -666,7 +666,7 @@ with tab_opt:
         from sendit.coach import rule_based, llm_rewrite, summary_for_llm, llm_available
         for line in rule_based(R, hid, partial):
             st.markdown(f"- {line}")
-        if os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+        if (os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY")) and _llm_ok():
             if st.button("Explain with LLM (paraphrases the structured result only)"):
                 txt = llm_rewrite(summary_for_llm(R, hid, partial))
                 st.write(txt or "LLM unavailable; showing rule-based insights above.")
