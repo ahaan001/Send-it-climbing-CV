@@ -29,9 +29,9 @@
   "ref_idx": 66
  },
  "timing": {
-  "pose_s": 1.713710069656372,
-  "stabilize_s": 1.82352614402771,
-  "total_s": 5.960931062698364
+  "pose_s": 0.0005848407745361328,
+  "stabilize_s": 0.004184722900390625,
+  "total_s": 0.03136587142944336
  },
  "morphology": {
   "arm_span_px": 417.83403401119506,
@@ -52,7 +52,7 @@
    "leg_over_arm_span": 0.49244796083879355
   }
  },
- "hold_method": "led",
+ "hold_method": "route_image",
  "wall_type": "led",
  "holds": [
   {
@@ -109,7 +109,7 @@
    "y": 671.88818359375,
    "grip": 3,
    "on_route": true,
-   "role": "finish",
+   "role": null,
    "source": "led",
    "label": "H4",
    "hits": 25,
@@ -157,7 +157,7 @@
    "y": 519.6593627929688,
    "grip": 3,
    "on_route": true,
-   "role": null,
+   "role": "finish",
    "source": "led",
    "label": "H8",
    "hits": 25,
@@ -198,6 +198,16 @@
    "label": "H11",
    "hits": 11,
    "hue": 12
+  },
+  {
+   "id": 12,
+   "x": 700.0714285714287,
+   "y": 759.0857142857143,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "manual",
+   "label": "H12"
   }
  ],
  "events": [
@@ -265,5 +275,28 @@
   "contact_radius_frac": 0.12,
   "min_contact_frames": 8
  },
- "cache_dir": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/cache"
+ "cache_dir": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/cache",
+ "pose_file": "pose_route.json",
+ "H_route": [
+  [
+   1.0000000000000007,
+   2.556590629516146e-16,
+   -3.1546751000047965e-13
+  ],
+  [
+   1.994034612723869e-16,
+   1.0000000000000009,
+   -2.644809709147165e-13
+  ],
+  [
+   2.8253495953692123e-19,
+   4.1485061770224375e-19,
+   1.0
+  ]
+ ],
+ "route_image": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/route_photo.png",
+ "alignment": {
+  "method": "auto",
+  "inliers": 900
+ }
 }

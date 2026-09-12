@@ -168,18 +168,15 @@ of the climber–route pair, which is the premise of the project.
 
 ### Demo
 
-Two demo climbs ship with **cached analysis computed by this pipeline** (so judging doesn't depend on a 20-second
-live run), plus live re-run and upload modes:
-
-| Demo | Footage | What it shows |
-|---|---|---|
-| Spray wall | own phone footage, handheld | camera-motion compensation, 61 detected/inferred/curated holds, 11-move observed beta vs 5-move optimized beta, morphology re-routing |
-| Kilter-style LED board | public CruxCam dataset (static camera) | objective route membership from lit holds; full-route plan for measured vs simulated climber |
+One Kilter demo ships with **cached analysis computed by this pipeline** (so judging doesn't depend on a live run):
+the public CruxCam clip (one move, static camera) plus its own climber-free frame as the route photo, so the demo
+exercises the exact photo-plus-video path. The spray-wall code (colour holds, dwell-inferred holds, handheld
+stabilisation) stays in the package but is hidden from the UI.
 
 **Three reliability layers.** (1) Live: upload → full pipeline (≈ 20–30 s). (2) Demo: the same pipeline's cached
 output loads instantly and every edit/slider re-optimizes live. (3) Emergency: pre-rendered results
 (`demo_assets/<demo>/comparison.png`, `diff.png`, `graph.png`, `personalize.png`) and browser screenshots
-(`docs/screenshots/`, including presentation mode) and a silent recorded walkthrough (`docs/walkthrough.webm`, made by
+(`docs/screenshots/`) and a silent recorded walkthrough (`docs/walkthrough.webm`, made by
 `scripts/record_walkthrough.py`). A 3-minute script (`docs/PRESENTATION.md`), judge Q&A (`docs/JUDGE_QA.md`) and
 submission blurb (`docs/SUBMISSION.md`) are included. `scripts/ui_screenshots.py` drives the running app with
 Playwright (tabs, hold click-select, demo switch, presets, upload) and regenerates the screenshots.
@@ -197,15 +194,19 @@ breaks with protobuf ≥ 5. If you install anything else afterwards, re-run `pip
 ### Running
 
 ```bash
-streamlit run app.py                       # UI (loads the cached demos instantly)
-#   http://localhost:8501/?present=1       # presentation mode: hero-first projector layout, one-click demo presets
-python3 scripts/build_demo_cache.py        # rebuild demo caches, four-limb plans + fallback images (--force to recompute CV)
+streamlit run app.py                       # UI: 1 Route -> 2 Climb -> 3 Explore (the Kilter demo loads instantly)
+python3 scripts/build_demo_cache.py        # rebuild the demo cache through the photo + video path (--force to recompute CV)
 python3 scripts/benchmark_morphology.py    # 200-route synthetic benchmark -> docs/benchmark_morphology.png
-python3 -m pytest tests -q                 # optimizer + four-limb tests
+python3 -m pytest tests -q                 # optimizer, four-limb, Kilter roles, alignment, injury, units, coaching tests
+python3 scripts/ui_screenshots.py          # Playwright screenshots of the running app (SENDIT_TEST_UPLOAD=1 also uploads photo + video)
 ```
 
-**Demo presets** (top of the Optimize tab): *Rate H25 terrible* (re-routes via H20/H29), *Reset ratings*,
-*Simulate 85 % climber* (side-by-side measured vs simulated), *Back to measured*, *Show full-body plan* (hands + feet).
+**Two inputs.** Step 1 takes a photo of the lit board (or a Kilter app screenshot) and reads the lit holds and their
+colours: green = start, blue = hand, orange/yellow = feet only, pink/purple = finish. Step 2 takes the climb video,
+aligns it to the photo automatically (ORB + RANSAC) or from four board corners you mark, and shows your climb next
+to the suggested line. Step 3 explores body size ("What if I were 15 % shorter?") and a feet plan ("Show feet too").
+"Deeper insight" in the sidebar asks an LLM (Grok via `XAI_API_KEY`, or Gemini) for per-move body-position coaching
+built only from the tracked data; without a key the button is shown disabled.
 
 Live processing of a 25 s 1080p-ish phone clip takes ≈ 20 s on a laptop (pose ≈ 9 s, stabilization ≈ 8 s); the
 optimization itself is milliseconds, so every slider, rating and hold edit re-optimizes instantly.
@@ -222,9 +223,14 @@ sendit/
                  move costs, exact A* with admissible bound + budgeted beam fallback, observed-sequence scoring,
                  comparison, crux explanation
   viz.py         judge-readable renderings (observed vs optimized, diff, feasibility graph, overlay video)
-  coach.py       rule-based coaching insights (+ optional LLM paraphrase, never decides the beta)
+  coach.py       cue-style tips, Why block, tracking gaps, LLM summary + Deeper insight (never decides the line)
+  kilter.py      LED hue -> Kilter role, start/finish setup, board-angle difficulty multiplier
+  register.py    photo <-> video alignment (ORB + RANSAC) and four-corner homography
+  injury.py      rule-based injury flags (heuristic, not medical advice)
+  units.py       metric / imperial formatting and the pixel scale from height or arm span
+  ui_text.py     every user-facing string
   pipeline.py    caching orchestration: analyze_video(), run_optimization()
-app.py           Streamlit UI: Route & holds · Climber · Optimize · Personalize · Method
+app.py           Streamlit UI: 1 Route · 2 Climb · 3 Explore (all copy in sendit/ui_text.py)
 tests/           deterministic optimizer tests (grip flips the beta, morphology flips feasibility, comparison math,
                  four-limb feasibility, A* == Dijkstra, beam validity)
 scripts/         build_demo_cache.py · benchmark_morphology.py · ui_screenshots.py · record_walkthrough.py

@@ -1,16 +1,18 @@
 {
- "observed_cost": 3.7070449667211784,
  "observed_moves": 1,
- "optimized_cost": 9.526888412510484,
- "optimized_moves": 3,
- "improvement_frac": -1.5699414218157874,
+ "optimized_moves": 4,
+ "observed_cost": 3.7070449667211784,
+ "optimized_cost": 10.49974885336572,
+ "improvement_frac": -1.832376986959664,
  "crux": "Moving the right hand H2 -> H4 is the highest-cost move under our model, driven by a long normalized reach (67% of arm span).",
- "simulated_85_cost": 4.80590774167855,
- "simulated_85_moves": 1,
+ "simulated_85_moves": 5,
  "simulated_85_holds": [
   9,
   2,
-  4
+  4,
+  5,
+  7,
+  8
  ],
  "optimized_holds": [
   9,
@@ -23,5 +25,16 @@
   9,
   2,
   4
+ ],
+ "alignment": {
+  "method": "auto",
+  "inliers": 900
+ },
+ "start_state": [
+  9,
+  2
+ ],
+ "finish_ids": [
+  8
  ]
 }

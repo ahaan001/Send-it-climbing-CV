@@ -1,5 +1,5 @@
 {
- "7a8a1bf2b5bbdb07": {
+ "8b71584b9b77e43e": {
   "label": "Full-body plan",
   "climber": {
    "arm_span_px": 417.83403401119506,
@@ -29,28 +29,34 @@
     null
    ],
    [
-    9,
+    7,
     5,
-    9,
+    null,
     null
    ],
    [
-    9,
-    5,
-    9,
-    9
+    7,
+    8,
+    null,
+    null
    ],
    [
-    5,
-    5,
-    9,
-    9
+    7,
+    8,
+    3,
+    null
+   ],
+   [
+    7,
+    8,
+    3,
+    3
    ],
    [
     8,
-    5,
-    9,
-    9
+    8,
+    3,
+    3
    ]
   ],
   "moves": [
@@ -84,12 +90,70 @@
     "reasons": []
    },
    {
+    "limb": "LEFT",
+    "hand": "LEFT",
+    "from": 9,
+    "to": 7,
+    "other": 5,
+    "cost": 1.6551005909921068,
+    "terms": {
+     "reach": 0.2581792269423644,
+     "grip": 0.4,
+     "move": 0.35,
+     "travel": 0.23568109467422704,
+     "direction": 0.01124026937551538,
+     "cross": 0.0,
+     "foot": 0.4,
+     "hang": 0.0,
+     "fmove": 0.0,
+     "ftravel": 0.0,
+     "fcross": 0.0
+    },
+    "feasible": true,
+    "reach_frac": 0.20324535987514772,
+    "travel_frac": 0.9427243786969082,
+    "up_frac": 0.8865230318193313,
+    "grip": 3,
+    "cross": 0.0,
+    "foot": 1.0,
+    "reasons": []
+   },
+   {
+    "limb": "RIGHT",
+    "hand": "RIGHT",
+    "from": 5,
+    "to": 8,
+    "other": 7,
+    "cost": 5.269825199755822,
+    "terms": {
+     "reach": 1.845309013097332,
+     "grip": 0.4,
+     "move": 0.35,
+     "travel": 0.18046329073204787,
+     "direction": 0.09405289592644195,
+     "cross": 0.5,
+     "foot": 0.4,
+     "hang": 1.5,
+     "fmove": 0.0,
+     "ftravel": 0.0,
+     "fcross": 0.0
+    },
+    "feasible": true,
+    "reach_frac": 0.543368606100475,
+    "travel_frac": 0.7218531629281915,
+    "up_frac": 0.2515886832959817,
+    "grip": 3,
+    "cross": 1.0,
+    "foot": 1.0,
+    "reasons": []
+   },
+   {
     "limb": "LEFT_FOOT",
     "hand": null,
     "from": null,
-    "to": 9,
+    "to": 3,
     "other": null,
-    "cost": 0.6748736545331873,
+    "cost": 0.6799520232866691,
     "terms": {
      "reach": 0.0,
      "grip": 0.2,
@@ -100,7 +164,7 @@
      "foot": 0.0,
      "hang": 0.0,
      "fmove": 0.25,
-     "ftravel": 0.22487365453318728,
+     "ftravel": 0.2299520232866691,
      "fcross": 0.0
     },
     "feasible": true,
@@ -116,9 +180,9 @@
     "limb": "RIGHT_FOOT",
     "hand": null,
     "from": null,
-    "to": 9,
-    "other": 9,
-    "cost": 0.8248736545331873,
+    "to": 3,
+    "other": 3,
+    "cost": 0.8299520232866691,
     "terms": {
      "reach": 0.0,
      "grip": 0.2,
@@ -129,7 +193,7 @@
      "foot": 0.0,
      "hang": 0.0,
      "fmove": 0.25,
-     "ftravel": 0.22487365453318728,
+     "ftravel": 0.2299520232866691,
      "fcross": 0.15
     },
     "feasible": true,
@@ -144,16 +208,16 @@
    {
     "limb": "LEFT",
     "hand": "LEFT",
-    "from": 9,
-    "to": 5,
-    "other": 5,
-    "cost": 0.9451060542705214,
+    "from": 7,
+    "to": 8,
+    "other": 8,
+    "cost": 0.9728604408552368,
     "terms": {
      "reach": 0.0,
      "grip": 0.4,
      "move": 0.35,
-     "travel": 0.19097130881398236,
-     "direction": 0.004134745456538999,
+     "travel": 0.13584215152511875,
+     "direction": 0.08701828933011804,
      "cross": 0.0,
      "foot": 0.0,
      "hang": 0.0,
@@ -163,71 +227,43 @@
     },
     "feasible": true,
     "reach_frac": 0.0,
-    "travel_frac": 0.7638852352559294,
-    "up_frac": 0.7432115079732344,
-    "grip": 3,
-    "cross": 0.0,
-    "foot": 0.0,
-    "reasons": []
-   },
-   {
-    "limb": "LEFT",
-    "hand": "LEFT",
-    "from": 5,
-    "to": 8,
-    "other": 5,
-    "cost": 4.281216116842453,
-    "terms": {
-     "reach": 3.256699930183963,
-     "grip": 0.4,
-     "move": 0.35,
-     "travel": 0.18046329073204787,
-     "direction": 0.09405289592644195,
-     "cross": 0.0,
-     "foot": 0.0,
-     "hang": 0.0,
-     "fmove": 0.0,
-     "ftravel": 0.0,
-     "fcross": 0.0
-    },
-    "feasible": true,
-    "reach_frac": 0.7218531629281915,
-    "travel_frac": 0.7218531629281915,
-    "up_frac": 0.2515886832959817,
+    "travel_frac": 0.543368606100475,
+    "up_frac": 0.10827715944988478,
     "grip": 3,
     "cross": 0.0,
     "foot": 0.0,
     "reasons": []
    }
   ],
-  "total_cost": 11.628032101941903,
+  "total_cost": 14.309652899939058,
   "term_totals": {
-   "reach": 6.903704009196504,
-   "grip": 1.6,
-   "move": 1.0499999999999998,
-   "travel": 0.6161285045502525,
-   "direction": 0.14759507019137114,
-   "cross": 0.21085720893740084,
-   "foot": 0.0,
-   "hang": 0.0,
+   "reach": 5.750492319052237,
+   "grip": 2.0,
+   "move": 1.4,
+   "travel": 0.7966804419356159,
+   "direction": 0.24171888344046555,
+   "cross": 0.7108572089374008,
+   "foot": 0.8,
+   "hang": 1.5,
    "fmove": 0.5,
-   "ftravel": 0.44974730906637456,
+   "ftravel": 0.4599040465733382,
    "fcross": 0.15
   },
-  "n_moves": 5,
-  "n_hand_moves": 3,
+  "n_moves": 6,
+  "n_hand_moves": 4,
   "n_foot_moves": 2,
   "max_reach_frac": 0.7638852352559294,
-  "mean_reach_frac": 0.49524613272804024,
+  "mean_reach_frac": 0.37762480030788803,
   "mean_grip": 3.0,
   "holds_used": [
    9,
    2,
    5,
+   7,
    8
   ],
   "feet_used": [
-   9
+   3
   ],
   "feet_by_state": [
    [
@@ -239,30 +275,34 @@
     null
    ],
    [
-    9,
+    null,
     null
    ],
    [
-    9,
-    9
+    null,
+    null
    ],
    [
-    9,
-    9
+    3,
+    null
    ],
    [
-    9,
-    9
+    3,
+    3
+   ],
+   [
+    3,
+    3
    ]
   ],
-  "crux_index": 0,
-  "crux_cost": 4.9019626217625545,
+  "crux_index": 2,
+  "crux_cost": 5.269825199755822,
   "n_infeasible": 0,
   "feasibility": {
    "max_reach_frac": 0.85,
    "max_down_frac": 0.2,
    "max_travel_frac": 1.0,
-   "match_finish": false,
+   "match_finish": true,
    "foot_window": [
     0.35,
     1.25
@@ -275,16 +315,16 @@
   "search": {
    "method": "astar",
    "exact": true,
-   "n_expanded": 508,
-   "n_pushed": 777,
-   "est_states": 412.9438775510204,
-   "hand_states": 68,
-   "runtime_s": 0.04925990104675293,
+   "n_expanded": 826,
+   "n_pushed": 1243,
+   "est_states": 779.2322530864197,
+   "hand_states": 85,
+   "runtime_s": 0.08306694030761719,
    "beam": null,
    "limbs": "all"
   }
  },
- "7ecadd7857265f45": {
+ "8e51c956d7cfb3a6": {
   "label": "Full-body plan",
   "climber": {
    "arm_span_px": 355.1589289095158,
@@ -338,22 +378,46 @@
     9
    ],
    [
-    5,
+    7,
+    7,
+    9,
+    9
+   ],
+   [
+    7,
     7,
     null,
     9
    ],
    [
-    5,
+    7,
     7,
     null,
     null
    ],
    [
+    7,
+    7,
+    3,
+    null
+   ],
+   [
+    7,
+    7,
+    3,
+    3
+   ],
+   [
     8,
     7,
-    null,
-    null
+    3,
+    3
+   ],
+   [
+    8,
+    8,
+    3,
+    3
    ]
   ],
   "moves": [
@@ -503,6 +567,35 @@
     "reasons": []
    },
    {
+    "limb": "LEFT",
+    "hand": "LEFT",
+    "from": 5,
+    "to": 7,
+    "other": 7,
+    "cost": 0.8238801260877613,
+    "terms": {
+     "reach": 0.0,
+     "grip": 0.4,
+     "move": 0.35,
+     "travel": 0.059778047022102265,
+     "direction": 0.014102079065659008,
+     "cross": 0.0,
+     "foot": 0.0,
+     "hang": 0.0,
+     "fmove": 0.0,
+     "ftravel": 0.0,
+     "fcross": 0.0
+    },
+    "feasible": true,
+    "reach_frac": 0.0,
+    "travel_frac": 0.23911218808840906,
+    "up_frac": 0.16860179276011403,
+    "grip": 3,
+    "cross": 0.0,
+    "foot": 0.0,
+    "reasons": []
+   },
+   {
     "limb": "LEFT_FOOT",
     "hand": null,
     "from": 9,
@@ -561,54 +654,141 @@
     "reasons": []
    },
    {
+    "limb": "LEFT_FOOT",
+    "hand": null,
+    "from": null,
+    "to": 3,
+    "other": null,
+    "cost": 0.7730433183382267,
+    "terms": {
+     "reach": 0.0,
+     "grip": 0.2,
+     "move": 0.0,
+     "travel": 0.0,
+     "direction": 0.0,
+     "cross": 0.0,
+     "foot": 0.0,
+     "hang": 0.0,
+     "fmove": 0.25,
+     "ftravel": 0.3230433183382267,
+     "fcross": 0.0
+    },
+    "feasible": true,
+    "reach_frac": 0.0,
+    "travel_frac": 0.0,
+    "up_frac": 0.0,
+    "grip": 3,
+    "cross": 0.0,
+    "foot": 0.0,
+    "reasons": []
+   },
+   {
+    "limb": "RIGHT_FOOT",
+    "hand": null,
+    "from": null,
+    "to": 3,
+    "other": 3,
+    "cost": 0.9230433183382267,
+    "terms": {
+     "reach": 0.0,
+     "grip": 0.2,
+     "move": 0.0,
+     "travel": 0.0,
+     "direction": 0.0,
+     "cross": 0.0,
+     "foot": 0.0,
+     "hang": 0.0,
+     "fmove": 0.25,
+     "ftravel": 0.3230433183382267,
+     "fcross": 0.15
+    },
+    "feasible": true,
+    "reach_frac": 0.0,
+    "travel_frac": 0.0,
+    "up_frac": 0.0,
+    "grip": 3,
+    "cross": 0.0,
+    "foot": 0.0,
+    "reasons": []
+   },
+   {
     "limb": "LEFT",
     "hand": "LEFT",
-    "from": 5,
+    "from": 7,
     "to": 8,
     "other": 7,
-    "cost": 5.527021137379998,
+    "cost": 3.5662496717291114,
     "terms": {
      "reach": 2.554060917781774,
      "grip": 0.4,
      "move": 0.35,
-     "travel": 0.21230975380240927,
-     "direction": 0.11065046579581408,
+     "travel": 0.1598142959119044,
+     "direction": 0.10237445803543299,
      "cross": 0.0,
-     "foot": 0.4,
-     "hang": 1.5,
+     "foot": 0.0,
+     "hang": 0.0,
      "fmove": 0.0,
      "ftravel": 0.0,
      "fcross": 0.0
     },
     "feasible": true,
     "reach_frac": 0.6392571836476176,
-    "travel_frac": 0.8492390152096371,
-    "up_frac": 0.29598668623056673,
+    "travel_frac": 0.6392571836476176,
+    "up_frac": 0.1273848934704527,
     "grip": 3,
     "cross": 0.0,
-    "foot": 1.0,
+    "foot": 0.0,
+    "reasons": []
+   },
+   {
+    "limb": "RIGHT",
+    "hand": "RIGHT",
+    "from": 7,
+    "to": 8,
+    "other": 8,
+    "cost": 1.0121887539473373,
+    "terms": {
+     "reach": 0.0,
+     "grip": 0.4,
+     "move": 0.35,
+     "travel": 0.1598142959119044,
+     "direction": 0.10237445803543299,
+     "cross": 0.0,
+     "foot": 0.0,
+     "hang": 0.0,
+     "fmove": 0.0,
+     "ftravel": 0.0,
+     "fcross": 0.0
+    },
+    "feasible": true,
+    "reach_frac": 0.0,
+    "travel_frac": 0.6392571836476176,
+    "up_frac": 0.1273848934704527,
+    "grip": 3,
+    "cross": 0.0,
+    "foot": 0.0,
     "reasons": []
    }
   ],
-  "total_cost": 16.74000521221235,
+  "total_cost": 18.311389263273014,
   "term_totals": {
    "reach": 8.209597547488306,
-   "grip": 2.0,
-   "move": 1.4,
-   "travel": 0.809241414096354,
-   "direction": 0.2074283804323182,
+   "grip": 3.2,
+   "move": 2.1,
+   "travel": 0.9763382991398559,
+   "direction": 0.3156289097730291,
    "cross": 0.19925428321978642,
-   "foot": 0.8,
-   "hang": 1.5,
-   "fmove": 1.0,
-   "ftravel": 0.46448358697558234,
-   "fcross": 0.15
+   "foot": 0.4,
+   "hang": 0.0,
+   "fmove": 1.5,
+   "ftravel": 1.1105702236520356,
+   "fcross": 0.3
   },
-  "n_moves": 8,
-  "n_hand_moves": 4,
-  "n_foot_moves": 4,
+  "n_moves": 12,
+  "n_hand_moves": 6,
+  "n_foot_moves": 6,
   "max_reach_frac": 0.7845381216091369,
-  "mean_reach_frac": 0.5361976057785073,
+  "mean_reach_frac": 0.35746507051900483,
   "mean_grip": 3.0,
   "holds_used": [
    9,
@@ -619,7 +799,8 @@
    8
   ],
   "feet_used": [
-   9
+   9,
+   3
   ],
   "feet_by_state": [
    [
@@ -647,6 +828,10 @@
     9
    ],
    [
+    9,
+    9
+   ],
+   [
     null,
     9
    ],
@@ -655,18 +840,30 @@
     null
    ],
    [
-    null,
+    3,
     null
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
    ]
   ],
-  "crux_index": 7,
-  "crux_cost": 5.527021137379998,
+  "crux_index": 0,
+  "crux_cost": 5.20590774167855,
   "n_infeasible": 0,
   "feasibility": {
    "max_reach_frac": 0.85,
    "max_down_frac": 0.2,
    "max_travel_frac": 1.0,
-   "match_finish": false,
+   "match_finish": true,
    "foot_window": [
     0.35,
     1.25
@@ -679,11 +876,11 @@
   "search": {
    "method": "astar",
    "exact": true,
-   "n_expanded": 230,
-   "n_pushed": 358,
-   "est_states": 218.13017751479293,
-   "hand_states": 64,
-   "runtime_s": 0.019189119338989258,
+   "n_expanded": 441,
+   "n_pushed": 662,
+   "est_states": 434.328125,
+   "hand_states": 77,
+   "runtime_s": 0.0392909049987793,
    "beam": null,
    "limbs": "all"
   }

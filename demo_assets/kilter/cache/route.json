@@ -1,0 +1,161 @@
+{
+ "name": "Kilter demo route",
+ "holds": [
+  {
+   "id": 0,
+   "x": 851.9691162109375,
+   "y": 1141.4608154296875,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H0",
+   "hits": 25,
+   "hue": 83
+  },
+  {
+   "id": 1,
+   "x": 812.5487670898438,
+   "y": 1070.5443115234375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H1",
+   "hits": 25,
+   "hue": 93
+  },
+  {
+   "id": 2,
+   "x": 670.585693359375,
+   "y": 930.5269165039062,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "led",
+   "label": "H2",
+   "hits": 25,
+   "hue": 14
+  },
+  {
+   "id": 3,
+   "x": 205.4481964111328,
+   "y": 691.1444702148438,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H3",
+   "hits": 25,
+   "hue": 96
+  },
+  {
+   "id": 4,
+   "x": 563.5086059570312,
+   "y": 671.88818359375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H4",
+   "hits": 25,
+   "hue": 85
+  },
+  {
+   "id": 5,
+   "x": 398.97412109375,
+   "y": 624.7816772460938,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H5",
+   "hits": 25,
+   "hue": 91
+  },
+  {
+   "id": 6,
+   "x": 614.464111328125,
+   "y": 606.609375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H6",
+   "hits": 25,
+   "hue": 100
+  },
+  {
+   "id": 7,
+   "x": 338.7560119628906,
+   "y": 564.9012451171875,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H7",
+   "hits": 25,
+   "hue": 101
+  },
+  {
+   "id": 8,
+   "x": 116.27145385742188,
+   "y": 519.6593627929688,
+   "grip": 3,
+   "on_route": true,
+   "role": "finish",
+   "source": "led",
+   "label": "H8",
+   "hits": 25,
+   "hue": 106
+  },
+  {
+   "id": 9,
+   "x": 472.7278137207031,
+   "y": 935.3207397460938,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "led",
+   "label": "H9",
+   "hits": 21,
+   "hue": 14
+  },
+  {
+   "id": 10,
+   "x": 681.6533813476562,
+   "y": 1059.542236328125,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H10",
+   "hits": 15,
+   "hue": 78
+  },
+  {
+   "id": 11,
+   "x": 593.2188110351562,
+   "y": 1035.9215087890625,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H11",
+   "hits": 11,
+   "hue": 12
+  },
+  {
+   "id": 12,
+   "x": 700.0714285714287,
+   "y": 759.0857142857143,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "manual",
+   "label": "H12"
+  }
+ ],
+ "angle": 40,
+ "body": null
+}

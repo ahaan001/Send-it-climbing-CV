@@ -1,62 +1,48 @@
-"""Send It -- Personalized Climbing Beta Optimizer (Streamlit UI).
+"""Send It -- Kilter board move coach (Streamlit UI).
 
 Run:  streamlit run app.py
+
+Layout, one container per section so a design mockup maps one-to-one onto code:
+  SIDEBAR        route source, units, Deeper insight button
+  HEADER         title + status line, Deeper-insight panel (visible on every step)
+  STEP 1 ROUTE   route image -> lit holds -> roles -> board angle
+  STEP 2 CLIMB   climb video -> alignment -> results -> tips, flags, extras
+  STEP 3 EXPLORE body-size simulation, feet plan
+Every user-facing string lives in sendit/ui_text.py.
 """
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
 import time
-from dataclasses import replace
+from dataclasses import astuple
 
 import cv2
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
-from sendit import viz
+from sendit import viz, kilter, register, injury, coach
+from sendit import beta as beta_mod
+from sendit import ui_text as T
+from sendit import units as U
+from sendit import stabilize as stab_mod
 from sendit.holds import GRIP_LABELS, make_hold, next_id
-from dataclasses import astuple
-from sendit.optimizer import Weights, Feasibility, hold_graph_edges, LEFT, RIGHT, HANDS, TERM_KEYS
-from sendit.pipeline import (analyze_video, load_analysis, recompute_observed, recompute_feet, run_optimization,
-                             feet_for_result, fourlimb_cache_key)
+from sendit.optimizer import Weights, Feasibility, LEFT, RIGHT, HANDS
+from sendit.pipeline import (analyze_video, apply_route, load_analysis, load_analysis_pose, recompute_observed,
+                             recompute_feet, run_optimization, feet_for_result, fourlimb_cache_key,
+                             holds_for_video_frame)
 from sendit.pose import load_pose
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-# optional .env (LLM keys only; never committed) -- tiny loader, no extra dependency
-_env = os.path.join(ROOT, ".env")
-if os.path.exists(_env):
-    for _line in open(_env):
-        _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _v = _line.split("=", 1)
-            if _v.strip() and _k.strip() not in os.environ:
-                os.environ[_k.strip()] = _v.strip()
+coach.load_env(os.path.join(ROOT, ".env"))
 DEMOS = json.load(open(os.path.join(ROOT, "demo_assets", "demos.json")))["demos"]
-DEMO_BY_KEY = {d["key"]: d for d in DEMOS}
+DEMO = DEMOS[0]
 
-try:
-    _PRESENT_QP = st.query_params.get("present") == "1"
-except Exception:  # noqa
-    _PRESENT_QP = False
-st.set_page_config(page_title="Send It · Beta Optimizer", page_icon="🧗", layout="wide",
-                   initial_sidebar_state="collapsed" if _PRESENT_QP else "auto")
+st.set_page_config(page_title=T.PAGE_TITLE, page_icon="🧗", layout="wide")
 
-PRESENT_CSS = """
-<style>
-header[data-testid="stHeader"], [data-testid="stToolbar"], .stDeployButton, footer, #MainMenu {display:none !important;}
-html {font-size: 118%;}
-.metric-card .val {font-size: 2.5rem;}
-.metric-card .lab {font-size: 0.9rem;}
-button[data-baseweb="tab"] p {font-size: 1.25rem !important;}
-.hero-title {font-size: 2.5rem;}
-.block-container {padding-top: 0.6rem;}
-</style>
-"""
-
+# Existing CSS only (metric cards + line colours). No new styling: the visual pass happens in Claude Design.
 st.markdown("""
 <style>
 .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
@@ -66,221 +52,31 @@ st.markdown("""
 .metric-card .sub {font-size:0.8rem; color:#b7c0cf;}
 .obs {color:#ff8c00;} .opt {color:#00c8ff;} .crux {color:#ff4040;}
 .hero-title {font-size:2.0rem; font-weight:800; margin-bottom:0;}
-.tagline {color:#9aa3b2; margin-top:0;}
-.pill {display:inline-block; padding:2px 10px; border-radius:999px; background:#2b3140; color:#dfe5ee; font-size:0.78rem; margin-right:6px;}
 </style>
 """, unsafe_allow_html=True)
 
+WEIGHT_DEFAULTS = {"w_reach": 1.0, "w_grip": 0.8, "w_move": 0.35, "w_travel": 0.25, "w_dir": 0.4, "w_cross": 0.5, "w_foot": 0.4}
+STYLE_PRESETS = {
+    T.STYLE_BALANCED: dict(WEIGHT_DEFAULTS),
+    T.STYLE_FEWER: {**WEIGHT_DEFAULTS, "w_move": 1.0},
+    T.STYLE_SHORTER: {**WEIGHT_DEFAULTS, "w_reach": 2.0, "w_move": 0.2},
+}
+CANVAS_W = 600
+COMPARISON_MAX_H = 640
 
-# ----------------------------------------------------------------------------- helpers
+
+# ============================================================================ helpers
 def card(label, value, sub="", cls=""):
     st.markdown(f'<div class="metric-card"><div class="lab">{label}</div>'
                 f'<div class="val {cls}">{value}</div><div class="sub">{sub}</div></div>', unsafe_allow_html=True)
-
-
-def curated_path(cache_dir):
-    return os.path.join(cache_dir, "holds_edited.json")
-
-
-def load_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
-    """Load cached analysis for a demo, or run the pipeline on an upload."""
-    if demo_key:
-        d = DEMO_BY_KEY[demo_key]
-        cache = os.path.join(ROOT, d["cache"])
-        video = os.path.join(ROOT, d["video"])
-        if os.path.exists(os.path.join(cache, "analysis.json")) and not force:
-            analysis = load_analysis(cache)
-            mode = "cached"
-        else:
-            analysis = _run_with_progress(video, cache, d.get("wall_type", "auto"), force)
-            mode = "live"
-    else:
-        cache = os.path.join(ROOT, "demo_output", "uploads", hashlib.md5(open(upload_path, "rb").read()).hexdigest()[:10])
-        analysis = _run_with_progress(upload_path, cache, wall_type, force)
-        mode = "live"
-    analysis["cache_dir"] = cache
-    pose_wall = load_pose(os.path.join(cache, "pose_wall.json"))
-    bg = cv2.imread(os.path.join(cache, "background.png"))
-    holds = analysis["holds"]
-    if os.path.exists(curated_path(cache)):
-        holds = json.load(open(curated_path(cache)))
-        curated = True
-    else:
-        curated = False
-    return analysis, pose_wall, bg, holds, mode, curated
-
-
-def _run_with_progress(video, cache, wall_type, force):
-    bar = st.progress(0.0, text="Starting pipeline…")
-    stage_w = {"pose": (0.0, 0.55), "stabilize": (0.55, 0.85), "background": (0.85, 0.9), "holds": (0.9, 0.95), "observed beta": (0.95, 1.0)}
-
-    def prog(stage, frac):
-        key = stage.replace(" (cached)", "")
-        lo, hi = stage_w.get(key, (0.0, 1.0))
-        bar.progress(min(1.0, lo + (hi - lo) * frac), text=f"{stage} … {frac:.0%}")
-
-    t = time.time()
-    try:
-        analysis = analyze_video(video, cache, force=force, progress=prog, wall_type=wall_type)
-    except Exception as e:  # malformed video, no person visible, etc.
-        bar.empty()
-        st.error(f"Could not analyze this video: {e}. Make sure it is a readable video with one climber visible.")
-        st.stop()
-    bar.progress(1.0, text=f"Done in {time.time() - t:.1f}s")
-    # overlay video for the climber tab
-    try:
-        from sendit.viz import render_pose_overlay_video
-        pose = load_pose(os.path.join(cache, "pose.json"))
-        render_pose_overlay_video(video, pose, os.path.join(cache, "overlay.mp4"))
-    except Exception as e:  # noqa
-        st.warning(f"Overlay video not rendered: {e}")
-    return analysis
-
-
-def ensure_state():
-    ss = st.session_state
-    ss.setdefault("source_key", None)
-    ss.setdefault("analysis", None)
-    ss.setdefault("holds", None)
-    ss.setdefault("placements", None)
-    ss.setdefault("selected", None)
-    ss.setdefault("edit_mode", "select")
-    ss.setdefault("last_click", None)
-    ss.setdefault("box", None)
-    ss.setdefault("finish_choice", "observed")
-    for k, v in {"max_reach": 0.85, "w_reach": 1.0, "w_grip": 0.8, "w_move": 0.35, "w_travel": 0.25, "w_dir": 0.4,
-                 "w_cross": 0.5, "w_foot": 0.4, "max_down": 0.2, "match_finish": False, "scale_pct": 85,
-                 "sim_on_opt": False, "show_feet": False, "fast_beam": False, "present": _PRESENT_QP}.items():
-        ss.setdefault(k, v)
-
-
-def set_source(demo_key=None, upload_path=None, wall_type="auto", force=False):
-    analysis, pose_wall, bg, holds, mode, curated = load_source(demo_key, upload_path, wall_type, force)
-    ss = st.session_state
-    ss.analysis, ss.pose_wall, ss.bg = analysis, pose_wall, bg
-    ss.holds = [dict(h) for h in holds]
-    ss.holds_baseline = {h["id"]: int(h.get("grip", 3)) for h in holds}
-    ss.sim_on_opt = False
-    ss.placements = recompute_observed(analysis, ss.holds, pose_wall) if curated else analysis["placements"]
-    ss.foot_events = recompute_feet(analysis, ss.holds, pose_wall) if curated else analysis.get("foot_events", [])
-    fl_path = os.path.join(analysis["cache_dir"], "fourlimb.json")
-    ss.fourlimb_store = json.load(open(fl_path)) if os.path.exists(fl_path) else {}
-    ss.mode, ss.curated = mode, curated
-    ss.selected, ss.last_click = None, None
-    ss.box = viz.crop_box(ss.holds, bg.shape[1], bg.shape[0])
-    ss.source_key = demo_key or upload_path
-    ss.finish_choice = DEMO_BY_KEY[demo_key].get("default_finish", "observed") if demo_key else "observed"
 
 
 def hid_map():
     return {h["id"]: h for h in st.session_state.holds}
 
 
-def refresh_observed():
-    ss = st.session_state
-    ss.placements = recompute_observed(ss.analysis, ss.holds, ss.pose_wall)
-    ss.foot_events = recompute_feet(ss.analysis, ss.holds, ss.pose_wall)
-
-
-def finish_ids_from_choice():
-    ss = st.session_state
-    if ss.finish_choice == "observed":
-        return None  # pipeline default: role == finish
-    if ss.finish_choice == "top":
-        route = [h for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot"]
-        return [min(route, key=lambda h: h["y"])["id"]] if route else None
-    return [int(ss.finish_choice)]
-
-
-@st.cache_data(show_spinner=False, max_entries=256)
-def _opt_cached(holds_json, morph_json, placements_json, w_tuple, f_tuple, scale, finish_tuple, fourlimb, fl_kwargs):
-    holds = json.loads(holds_json)
-    return run_optimization(holds, json.loads(morph_json), json.loads(placements_json), Weights(*w_tuple),
-                            Feasibility(*f_tuple), morph_scale=scale, finish_ids=list(finish_tuple) if finish_tuple else None,
-                            fourlimb=fourlimb, **dict(fl_kwargs))
-
-
-@st.cache_resource(show_spinner=False)
-def _llm_ok() -> bool:
-    from sendit.coach import llm_available
-    return llm_available()
-
-
-def apply_preset(p):
-    """on_click callback: mutate session state; Streamlit reruns afterwards (never call st.rerun here)."""
-    ss = st.session_state
-    a = p.get("args", {})
-    if p["action"] == "set_grip":
-        for h in ss.holds:
-            if h["id"] == a["hold"]:
-                h["grip"] = int(a["grip"])
-                ss.selected = h["id"]
-    elif p["action"] == "reset_grips":
-        for h in ss.holds:
-            h["grip"] = ss.get("holds_baseline", {}).get(h["id"], 3)
-    elif p["action"] == "set_scale":
-        ss.scale_pct = int(a["pct"])
-        ss.sim_on_opt = True
-    elif p["action"] == "scale_measured":
-        ss.sim_on_opt = False
-    elif p["action"] == "show_feet":
-        ss.show_feet = True
-
-
-def preset_row(where: str):
-    ss = st.session_state
-    key = ss.source_key if ss.source_key in DEMO_BY_KEY else None
-    presets = DEMO_BY_KEY[key].get("presets", []) if key else []
-    if not presets:
-        return
-    cols = st.columns(len(presets) + 1)
-    cols[0].markdown("<div style='padding-top:6px;color:#9aa3b2'>Demo moves</div>", unsafe_allow_html=True)
-    for i, p in enumerate(presets):
-        cols[i + 1].button(p["label"], key=f"preset_{where}_{i}", on_click=apply_preset, args=(p,), width="stretch")
-
-
-def optimize(weights, feas, morph_scale=1.0, fourlimb=False, fl_kwargs=()):
-    """Memoized: sliders, ratings and hold edits re-optimize instantly after the first run.
-    Four-limb results precomputed by scripts/build_demo_cache.py are used when inputs match."""
-    ss = st.session_state
-    fin = finish_ids_from_choice()
-    R = _opt_cached(json.dumps(ss.holds, sort_keys=True), json.dumps(ss.analysis["morphology"], sort_keys=True),
-                    json.dumps(ss.placements, sort_keys=True), astuple(weights), astuple(feas), float(morph_scale),
-                    tuple(fin) if fin else None, False, ())
-    if fourlimb:
-        key = fourlimb_cache_key(ss.holds, R["weights"], R["feasibility"], float(morph_scale), R["finish_ids"])
-        pre = ss.get("fourlimb_store", {}).get(key)
-        if pre is not None:
-            R = dict(R)
-            R["optimized_4limb"] = pre
-        else:
-            R = _opt_cached(json.dumps(ss.holds, sort_keys=True), json.dumps(ss.analysis["morphology"], sort_keys=True),
-                            json.dumps(ss.placements, sort_keys=True), astuple(weights), astuple(feas), float(morph_scale),
-                            tuple(fin) if fin else None, True, tuple(sorted(dict(fl_kwargs).items())))
-    return R
-
-
-def cost_breakdown_chart(results: list, colors: list):
-    """Stacked bars: per-move cost by term, one group per beta."""
-    fig = go.Figure()
-    terms = TERM_KEYS
-    palette = {"reach": "#4f8cff", "grip": "#ff6b6b", "move": "#a0a7b4", "travel": "#7bd389",
-               "direction": "#ffd166", "cross": "#c77dff", "foot": "#ff9f43", "hang": "#ff5c8a",
-               "fmove": "#6dd3c7", "ftravel": "#3fb8a8", "fcross": "#2a8f82"}
-    for res, col in zip(results, colors):
-        if not res:
-            continue
-        x = [f"{res['label'][:3]} · {i + 1}{limb_tag(m)}" for i, m in enumerate(res["moves"])]
-        for t in terms:
-            y = [m["terms"].get(t, 0.0) for m in res["moves"]]
-            if sum(y) < 1e-9:
-                continue
-            fig.add_bar(name=t, x=x, y=y, marker_color=palette[t], legendgroup=t,
-                        showlegend=(res is results[0]), hovertemplate=f"{t}: %{{y:.2f}}<extra></extra>")
-    fig.update_layout(barmode="stack", height=320, margin=dict(l=10, r=10, t=30, b=10),
-                      legend=dict(orientation="h", y=1.12), paper_bgcolor="rgba(0,0,0,0)",
-                      plot_bgcolor="rgba(0,0,0,0)", yaxis_title="move cost", xaxis_title="hand moves (observed left, optimized right)")
-    return fig
+def label_of(hid, i):
+    return hid.get(i, {}).get("label", f"H{i}")
 
 
 def limb_tag(m):
@@ -292,474 +88,839 @@ def sequence_text(res, hid):
     if not res:
         return "—"
     L, R = res["start_state"][0], res["start_state"][1]
-    parts = [f"start L:{hid[L]['label'] if L in hid else L} R:{hid[R]['label'] if R in hid else R}"]
+    parts = [f"start L:{label_of(hid, L)} R:{label_of(hid, R)}"]
     for m in res["moves"]:
-        tgt = hid[m["to"]]["label"] if m["to"] in hid else ("loose" if m["to"] is None else m["to"])
-        if (m.get("limb") or m.get("hand")) in HANDS:
-            parts.append(f"{limb_tag(m)}→{tgt} ({m['reach_frac']:.0%})")
-        else:
-            parts.append(f"{limb_tag(m)}→{tgt}")
+        tgt = label_of(hid, m["to"]) if m["to"] is not None else "loose"
+        parts.append(f"{limb_tag(m)}→{tgt}")
     return "  ·  ".join(parts)
 
 
-# ----------------------------------------------------------------------------- sidebar
+def route_dir_for(image_bytes: bytes) -> str:
+    return os.path.join(ROOT, "demo_output", "routes", hashlib.md5(image_bytes).hexdigest()[:10])
+
+
+def route_file(rdir):
+    return os.path.join(rdir, "route.json")
+
+
+def load_route_file(rdir):
+    p = route_file(rdir)
+    return json.load(open(p)) if os.path.exists(p) else None
+
+
+def save_route_file(rdir, holds, angle, body, name):
+    os.makedirs(rdir, exist_ok=True)
+    with open(route_file(rdir), "w") as f:
+        json.dump({"name": name, "holds": holds, "angle": angle, "body": body}, f, indent=1)
+    with open(os.path.join(rdir, "holds_edited.json"), "w") as f:   # kept for scripts/build_demo_cache.py
+        json.dump(holds, f, indent=1)
+
+
+def ensure_state():
+    ss = st.session_state
+    defaults = {
+        "units": U.METRIC, "source": T.SOURCE_DEMO, "route": None, "holds": None, "analysis": None, "pose": None,
+        "placements": None, "foot_events": [], "fourlimb_store": {}, "pending": None, "align": None,
+        "corners": {"route": [], "video": []}, "selected": None, "edit_mode": T.MODE_PICK, "move_pending": None,
+        "last_click": None, "last_corner_click": {"route": None, "video": None},
+        "body": {"height_m": None, "span_m": None}, "style": T.STYLE_BALANCED,
+        "max_reach": 0.85, "max_down": 0.2, "match_finish": True, "scale_pct": 100, "show_feet": False, "fast_beam": False,
+        "insight_open": False, "insight_cache": {}, "video_view": T.VIDEO_ORIGINAL, "sweep_rows": None,
+    }
+    for k, v in defaults.items():
+        ss.setdefault(k, v)
+    for k, v in WEIGHT_DEFAULTS.items():
+        ss.setdefault(k, v)
+
+
+# ============================================================================ loading: route, demo, video
+def set_route(image_bgr, image_path, kind, name, rdir, holds, angle=40, body=None):
+    ss = st.session_state
+    ss.route = {"image": image_bgr, "image_path": image_path, "kind": kind, "name": name, "dir": rdir, "angle": int(angle)}
+    ss.holds = [dict(h) for h in holds]
+    ss.body = dict(body or {"height_m": None, "span_m": None})
+    ss.analysis, ss.pose, ss.placements, ss.foot_events, ss.pending, ss.align = None, None, None, [], None, None
+    ss.fourlimb_store, ss.selected, ss.move_pending, ss.last_click = {}, None, None, None
+    ss.corners = {"route": [], "video": []}
+    ss.insight_cache, ss.insight_open, ss.sweep_rows, ss.scale_pct, ss.show_feet = {}, False, None, 100, False
+
+
+def refresh_observed():
+    ss = st.session_state
+    if ss.analysis is None:
+        return
+    ss.placements = recompute_observed(ss.analysis, ss.holds, ss.pose)
+    ss.foot_events = recompute_feet(ss.analysis, ss.holds, ss.pose)
+    ss.sweep_rows = None
+
+
+def load_demo():
+    ss = st.session_state
+    d = DEMO
+    cache = os.path.join(ROOT, d["cache"])
+    img_path = os.path.join(ROOT, d["route_image"])
+    img = cv2.imread(img_path)
+    rf = load_route_file(cache)
+    if rf:
+        holds, angle, body = rf["holds"], rf.get("angle", 40), rf.get("body")
+    else:
+        cur = os.path.join(cache, "holds_edited.json")
+        holds = json.load(open(cur)) if os.path.exists(cur) else kilter.detect_route_holds(img)
+        angle, body = d.get("angle", 40), None
+    set_route(img, img_path, "photo", d["name"], cache, holds, angle, body)
+    if os.path.exists(os.path.join(cache, "analysis.json")):
+        a = load_analysis(cache)
+        a["cache_dir"] = cache
+        a["video"] = os.path.join(ROOT, d["video"])
+        if a.get("pose_file") != "pose_route.json":   # cache built before the route-image flow: photo == background frame
+            a = apply_route(a, holds, np.eye(3), img_path, {"method": "identity", "inliers": 0})
+        ss.analysis, ss.pose = a, load_analysis_pose(a)
+        ss.align = a.get("alignment") or {"method": "auto", "inliers": 0}
+        fl = os.path.join(cache, "fourlimb.json")
+        ss.fourlimb_store = json.load(open(fl)) if os.path.exists(fl) else {}
+        refresh_observed()
+    ss.source_loaded = T.SOURCE_DEMO
+
+
+def load_own_image(up, kind):
+    ss = st.session_state
+    data = up.getvalue()
+    rdir = route_dir_for(data)
+    os.makedirs(rdir, exist_ok=True)
+    img_path = os.path.join(rdir, "route.png")
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        st.error(T.ROUTE_NONE_DETECTED)
+        return
+    cv2.imwrite(img_path, img)
+    rf = load_route_file(rdir)
+    if rf:
+        holds, angle, body, msg = rf["holds"], rf.get("angle", 40), rf.get("body"), T.ROUTE_LOADED_SAVED
+    else:
+        holds, angle, body = kilter.detect_route_holds(img), 40, None
+        msg = T.ROUTE_DETECTED.format(n=len(holds)) if holds else T.ROUTE_NONE_DETECTED
+    name = os.path.splitext(up.name)[0]
+    set_route(img, img_path, kind, name, rdir, holds, angle, body)
+    ss.route_msg = msg
+    ss.route_image_key = up.name + str(len(data))
+
+
+def _run_with_progress(video, cache):
+    bar = st.progress(0.0, text=T.STAGE_NAMES["pose"])
+    stage_w = {"pose": (0.0, 0.6), "stabilize": (0.6, 0.9), "background": (0.9, 0.97), "holds": (0.97, 0.99), "observed beta": (0.99, 1.0)}
+
+    def prog(stage, frac):
+        key = stage.replace(" (cached)", "")
+        lo, hi = stage_w.get(key, (0.0, 1.0))
+        bar.progress(min(1.0, lo + (hi - lo) * frac), text=f"{T.STAGE_NAMES.get(key, key)} {frac:.0%}")
+
+    t = time.time()
+    try:
+        analysis = analyze_video(video, cache, progress=prog, wall_type="led", detect_holds=False)
+    except Exception as e:  # malformed video, no person visible, etc.
+        bar.empty()
+        st.error(T.ANALYZE_FAIL.format(err=e))
+        st.stop()
+    bar.progress(1.0, text=T.STAGE_DONE.format(s=time.time() - t))
+    try:
+        pose = load_pose(os.path.join(cache, "pose.json"))
+        viz.render_pose_overlay_video(video, pose, os.path.join(cache, "overlay.mp4"))
+    except Exception:  # noqa
+        st.warning(T.OVERLAY_FAIL)
+    return analysis
+
+
+def analyze_own_video(up):
+    ss = st.session_state
+    os.makedirs(os.path.join(ROOT, "demo_output", "uploads"), exist_ok=True)
+    path = os.path.join(ROOT, "demo_output", "uploads", up.name)
+    data = up.getbuffer()
+    with open(path, "wb") as f:
+        f.write(data)
+    cache = os.path.join(ROOT, "demo_output", "uploads", hashlib.md5(bytes(data)).hexdigest()[:10])
+    analysis = _run_with_progress(path, cache)
+    bg = cv2.imread(os.path.join(cache, "background.png"))
+    ss.pending = {"analysis": analysis, "bg": bg}
+    ss.corners = {"route": [], "video": []}
+    if ss.route["kind"] == "photo":
+        H, n = register.align_images(bg, ss.route["image"])
+        if H is not None and register.plausible(H, bg.shape[1], bg.shape[0]):
+            finish_alignment(H, {"method": "auto", "inliers": int(n)})
+            return
+        ss.align = {"method": "corners", "pending": True, "auto_failed": True}
+    else:
+        ss.align = {"method": "corners", "pending": True, "auto_failed": False}
+
+
+def finish_alignment(H, info):
+    ss = st.session_state
+    a = apply_route(ss.pending["analysis"], ss.holds, H, ss.route["image_path"], info)
+    ss.analysis, ss.pose = a, load_analysis_pose(a)
+    ss.align, ss.pending, ss.fourlimb_store, ss.insight_cache = info, None, {}, {}
+    ss.corners = {"route": [], "video": []}
+    refresh_observed()
+
+
+# ============================================================================ results
+def current_weights():
+    return Weights(**{k: float(st.session_state[k]) for k in WEIGHT_DEFAULTS})
+
+
+def current_feas():
+    ss = st.session_state
+    return Feasibility(max_reach_frac=float(ss.max_reach), max_down_frac=float(ss.max_down), match_finish=bool(ss.match_finish))
+
+
+def body_morph():
+    ss = st.session_state
+    return U.apply_body_inputs(ss.analysis["morphology"], ss.body.get("height_m"), ss.body.get("span_m"))
+
+
+def start_and_rest():
+    """Kilter rules in the setup: start = the green holds, finish = the pink holds.
+    The observed hand assignment on the start holds is kept when it agrees with them."""
+    ss = st.session_state
+    setup = kilter.kilter_setup(ss.holds)
+    start_set = set(setup["start_ids"])
+    placements = list(ss.placements or [])
+    st_obs, consumed = beta_mod.initial_state(placements)
+    if st_obs and (not start_set or set(st_obs) <= start_set):
+        return st_obs, placements[consumed:], setup
+    if setup["start_state"]:
+        while placements and placements[0]["hold_id"] in start_set:
+            placements.pop(0)
+        return tuple(setup["start_state"]), placements, setup
+    return None, placements, setup
+
+
+@st.cache_data(show_spinner=False, max_entries=256)
+def _opt_cached(holds_json, morph_json, placements_json, w_tuple, f_tuple, scale, start_tuple, finish_tuple, fourlimb, fl_kwargs):
+    return run_optimization(json.loads(holds_json), json.loads(morph_json), json.loads(placements_json), Weights(*w_tuple),
+                            Feasibility(*f_tuple), morph_scale=scale, start_state=list(start_tuple) if start_tuple else None,
+                            finish_ids=list(finish_tuple) if finish_tuple else None, fourlimb=fourlimb, **dict(fl_kwargs))
+
+
+def compute(scale=1.0, fourlimb=False, fl_kwargs=()):
+    ss = st.session_state
+    st_, rest, setup = start_and_rest()
+    morph, _ = body_morph()
+    fin = setup["finish_ids"] or None
+    args = (json.dumps(ss.holds, sort_keys=True), json.dumps(morph, sort_keys=True), json.dumps(rest, sort_keys=True),
+            astuple(current_weights()), astuple(current_feas()), float(scale), tuple(st_) if st_ else None, tuple(fin) if fin else None)
+    R = _opt_cached(*args, False, ())
+    if fourlimb and "error" not in R:
+        key = fourlimb_cache_key(ss.holds, R["weights"], R["feasibility"], float(scale), R["finish_ids"])
+        pre = ss.fourlimb_store.get(key)
+        if pre is not None:
+            R = dict(R)
+            R["optimized_4limb"] = pre
+        else:
+            R = _opt_cached(*args, True, tuple(sorted(dict(fl_kwargs).items())))
+    return R
+
+
+def fourlimb_precomputed(R):
+    ss = st.session_state
+    key = fourlimb_cache_key(ss.holds, R["weights"], R["feasibility"], 1.0, R["finish_ids"])
+    return key in ss.fourlimb_store
+
+
+def is_partial(R):
+    obs = R.get("observed")
+    fin = set(R.get("finish_ids", []))
+    return bool(obs and obs["moves"] and not (set(obs["states"][-1]) & fin))
+
+
+def tracking_gaps():
+    ss = st.session_state
+    return coach.tracking_gaps(ss.pose, ss.analysis["fps"], ss.analysis["n_frames"])
+
+
+def insight_key():
+    ss = st.session_state
+    payload = {"route": ss.route["name"], "holds": ss.holds, "video": ss.analysis.get("video") if ss.analysis else None,
+               "w": {k: ss[k] for k in WEIGHT_DEFAULTS}, "f": [ss.max_reach, ss.max_down, ss.match_finish],
+               "body": ss.body, "angle": ss.route["angle"], "units": ss.units}
+    return hashlib.md5(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+@st.cache_resource(show_spinner=False)
+def _llm_status():
+    return coach.llm_available()
+
+
+def apply_style():
+    ss = st.session_state
+    for k, v in STYLE_PRESETS[ss.style].items():
+        ss[k] = v
+
+
+def apply_preset(action):
+    ss = st.session_state
+    if action == "shorter":
+        ss.scale_pct = 85
+    elif action == "measured":
+        ss.scale_pct = 100
+    elif action == "feet":
+        ss.show_feet = True
+
+
+# ============================================================================ SIDEBAR
 ensure_state()
-with st.sidebar:
-    st.markdown("## 🧗 Send It")
-    st.caption("Personalized climbing beta optimizer")
-    st.toggle("Presentation mode (projector)", key="present", help="Hero-first layout, larger type, no Streamlit chrome. Also: open the app with ?present=1")
-    src = st.radio("Source", ["Demo climb", "Upload video"], horizontal=True)
-    if src == "Demo climb":
-        names = {d["name"]: d["key"] for d in DEMOS}
-        pick = st.selectbox("Choose a demo", list(names.keys()))
-        key = names[pick]
-        c1, c2 = st.columns(2)
-        if c1.button("Load", type="primary", width="stretch") or st.session_state.source_key is None:
-            set_source(demo_key=key)
-        if c2.button("Re-run live", width="stretch", help="Recompute pose, stabilization and holds from the video (not cached)"):
-            set_source(demo_key=key, force=True)
-        st.caption(DEMO_BY_KEY[key]["blurb"])
-    else:
-        up = st.file_uploader("Climbing video (mp4/mov/avi)", type=["mp4", "mov", "avi", "m4v"])
-        wall = st.selectbox("Wall type", ["auto", "color", "led"], format_func=lambda x: {"auto": "Auto-detect", "color": "Normal gym wall (colour holds)", "led": "Lit board (Kilter / Moon / Tension)"}[x])
-        if up is not None and st.button("Analyze", type="primary"):
-            os.makedirs(os.path.join(ROOT, "demo_output", "uploads"), exist_ok=True)
-            path = os.path.join(ROOT, "demo_output", "uploads", up.name)
-            with open(path, "wb") as f:
-                f.write(up.getbuffer())
-            set_source(upload_path=path, wall_type=wall)
-
-    st.markdown("---")
-    st.markdown("### Optimizer settings")
-    max_reach = st.slider("Reach envelope (max hand-to-hand span, × arm span)", 0.5, 1.1, step=0.05, key="max_reach",
-                          help="An edge is feasible only if the climber can hold both holds at once. Auto-widened to cover any reach the climber actually performed.")
-    w_reach = st.slider("Reach weight", 0.0, 3.0, step=0.1, key="w_reach", help="(span / 0.4 arm span)² per move")
-    w_grip = st.slider("Grip-quality weight", 0.0, 3.0, step=0.1, key="w_grip", help="(rating−1)/4 of the target hold")
-    w_move = st.slider("Per-move penalty", 0.0, 2.0, step=0.05, key="w_move", help="Fixed cost of every hand movement")
-    with st.expander("Advanced terms"):
-        w_travel = st.slider("Travel weight", 0.0, 2.0, step=0.05, key="w_travel")
-        w_dir = st.slider("Sideways / downward weight", 0.0, 2.0, step=0.05, key="w_dir")
-        w_cross = st.slider("Crossed-hands weight", 0.0, 2.0, step=0.05, key="w_cross")
-        w_foot = st.slider("Foot-support weight", 0.0, 2.0, step=0.05, key="w_foot")
-        max_down = st.slider("Max downward move (× arm span)", 0.0, 0.6, step=0.05, key="max_down")
-        match_finish = st.checkbox("Require both hands on finish", key="match_finish")
-    WEIGHTS = Weights(w_reach=w_reach, w_grip=w_grip, w_move=w_move, w_travel=w_travel, w_dir=w_dir, w_cross=w_cross, w_foot=w_foot)
-    FEAS = Feasibility(max_reach_frac=max_reach, max_down_frac=max_down, match_finish=match_finish)
-
-if st.session_state.analysis is None:
-    st.info("Load a demo climb or upload a video from the sidebar.")
-    st.stop()
-
 ss = st.session_state
-A = ss.analysis
-hid = hid_map()
-bg = ss.bg
-PRESENT = bool(ss.get("present"))
-if PRESENT:
-    st.markdown(PRESENT_CSS, unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown(f"## 🧗 {T.APP_TITLE}")
+    st.caption(T.SIDEBAR_CAPTION)
+    src = st.radio(T.SOURCE_LABEL, [T.SOURCE_DEMO, T.SOURCE_OWN], horizontal=True, key="source")
+    if src == T.SOURCE_DEMO and ss.get("source_loaded") != T.SOURCE_DEMO:
+        load_demo()
+    elif src == T.SOURCE_OWN and ss.get("source_loaded") != T.SOURCE_OWN:
+        ss.route, ss.holds, ss.analysis, ss.pose, ss.placements, ss.pending, ss.align = None, None, None, None, None, None, None
+        ss.source_loaded = T.SOURCE_OWN
+    unit_pick = st.radio(T.UNITS_LABEL, [T.UNITS_METRIC, T.UNITS_IMPERIAL], horizontal=True,
+                         index=0 if ss.units == U.METRIC else 1)
+    ss.units = U.METRIC if unit_pick == T.UNITS_METRIC else U.IMPERIAL
+    st.markdown("---")
+    llm = _llm_status()
+    if st.button(T.INSIGHT_BUTTON, type="primary", width="stretch", disabled=not llm.get("ok"), help=T.INSIGHT_HELP):
+        ss.insight_open = True
+    if not llm.get("ok"):
+        st.caption(T.INSIGHT_DISABLED_CAPTION)
 
+# ============================================================================ HEADER
+st.markdown(f'<p class="hero-title">{T.APP_TITLE}</p>', unsafe_allow_html=True)
+if ss.route is None:
+    st.caption(T.HEADER_NO_ROUTE)
+elif ss.analysis is None:
+    st.caption(T.HEADER_ROUTE_ONLY.format(route=ss.route["name"]))
+else:
+    st.caption(T.HEADER_READY.format(route=ss.route["name"]))
 
-def show_hero(img):
-    """Comparison image; in presentation mode it lives in the left column beside the cards."""
-    st.image(img, width="stretch")
-
-
-def glance_strip(R, q4=None):
-    n_route = sum(1 for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot")
-    srch = (q4 or R["optimized"]).get("search", {})
-    F_ = R["feasibility"]
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        card("State", "(L hand, R hand, L foot, R foot)" if q4 else "(L hand, R hand)",
-             f"{n_route} route holds → ~{srch.get('est_states', 0):,.0f} states")
-    with c2:
-        card("Feasible move", f"span ≤ {F_.max_reach_frac:.2f} × arm span",
-             f"drop ≤ {F_.max_down_frac:.2f} · on-route · feet in leg window" if q4 else f"drop ≤ {F_.max_down_frac:.2f} · on-route · not foot-only")
-    with c3:
-        card("Objective", "reach² + grip + move + …", "normalized to THIS climber's arm span; same function scores the observed beta")
-    with c4:
-        card("Solver", "exact A*" if srch.get("exact", True) else f"beam {srch.get('beam')} (approx.)",
-             f"{srch.get('n_expanded', 0):,} states expanded · {srch.get('runtime_s', 0) * 1000:.0f} ms")
-
-# ----------------------------------------------------------------------------- header
-st.markdown('<p class="hero-title">Send It · Personalized Climbing Beta Optimizer</p>', unsafe_allow_html=True)
-if not PRESENT:
-    st.markdown('<p class="tagline">Video → pose → holds → <b>your</b> movement-cost graph → minimum-cost beta. '
-                'Here is what you did, what the optimizer recommends, and why.</p>', unsafe_allow_html=True)
-pills = [f"{'cached analysis (computed by this pipeline)' if ss.mode == 'cached' else 'live analysis'}",
-         f"{A['n_frames']} frames @ {A['fps']:.0f} fps",
-         (f"pose in {A['timing']['pose_s']:.1f}s" if A['timing']['pose_s'] > 0.5 else "pose cached"),
-         "camera: static" if A["camera"]["static"] else f"camera motion compensated ({A['camera']['max_shift_px']:.0f}px pan)",
-         f"holds: {A['hold_method']}" + (" + human-corrected" if ss.curated else "")]
-if not PRESENT:
-    st.markdown(" ".join(f'<span class="pill">{p}</span>' for p in pills), unsafe_allow_html=True)
-
-tab_route, tab_climber, tab_opt, tab_person, tab_method = st.tabs(
-    ["1 · Route & holds", "2 · Climber", "3 · Optimize", "4 · Personalize", "Method"])
-
-# ----------------------------------------------------------------------------- tab 1: holds editor
-with tab_route:
-    left, right = st.columns([3, 2])
-    with left:
-        st.markdown("#### Detected holds (click to edit)")
-        ss.edit_mode = st.radio("Click mode", ["select", "add", "remove", "move selected"], horizontal=True,
-                                index=["select", "add", "remove", "move selected"].index(ss.edit_mode))
-        img = viz.to_pil(bg)
-        viz.draw_holds(img, ss.holds, selected=ss.selected)
-        box = ss.box
-        img = img.crop(box)
-        disp_w = 560
-        scale = disp_w / img.width
-        from streamlit_image_coordinates import streamlit_image_coordinates
-        click = streamlit_image_coordinates(img, key="hold_canvas", width=disp_w)
-        if click and click != ss.last_click:
-            ss.last_click = click
-            shown_w = click.get("width") or disp_w   # component reports the rendered size when available
-            sc_click = shown_w / img.width
-            cx = box[0] + click["x"] / sc_click
-            cy = box[1] + click["y"] / sc_click
-            dists = [(np.hypot(h["x"] - cx, h["y"] - cy), h["id"]) for h in ss.holds]
-            nearest = min(dists)[1] if dists else None
-            near_enough = dists and min(dists)[0] < 0.08 * A["morphology"]["arm_span_px"]
-            if ss.edit_mode == "select":
-                ss.selected = nearest if near_enough else None
-            elif ss.edit_mode == "add":
-                nid = next_id(ss.holds)
-                ss.holds.append(make_hold(nid, cx, cy, source="manual"))
-                ss.selected = nid
-                refresh_observed()
-            elif ss.edit_mode == "remove" and near_enough:
-                ss.holds = [h for h in ss.holds if h["id"] != nearest]
-                ss.selected = None
-                refresh_observed()
-            elif ss.edit_mode == "move selected" and ss.selected is not None:
-                hid_map()[ss.selected]["x"], hid_map()[ss.selected]["y"] = cx, cy
-                refresh_observed()
-            st.rerun()
-        st.caption("Green ring = start · yellow ring = finish · fill colour = grip rating (green excellent → red terrible) · grey = off-route")
-    with right:
-        st.markdown("#### Selected hold")
-        if ss.selected is None or ss.selected not in hid_map():
-            st.info("Click a hold in *select* mode to rate it, mark it start/finish/foot-only, or toggle route membership.")
+# ---- Deeper-insight panel: between the header and the steps, so it is visible whichever step is open
+insight_box = st.container()
+with insight_box:
+    if ss.insight_open:
+        st.markdown(f"#### {T.INSIGHT_TITLE}")
+        if ss.analysis is None or ss.route is None:
+            st.info(T.INSIGHT_NEEDS_RESULTS)
         else:
-            h = hid_map()[ss.selected]
-            st.markdown(f"**Hold {h['id']}** · source: `{h['source']}` · ({h['x']:.0f}, {h['y']:.0f})")
-            g = st.select_slider("Grip quality (1 = excellent … 5 = terrible)", options=[1, 2, 3, 4, 5], value=int(h["grip"]),
-                                 format_func=lambda v: f"{v} · {GRIP_LABELS[v]}")
-            role = st.selectbox("Role", ["none", "start", "finish", "foot"], index=["none", "start", "finish", "foot"].index(h["role"] or "none"),
-                                format_func=lambda r: {"none": "regular hand hold", "start": "start hold", "finish": "finish hold", "foot": "foot-only hold"}[r])
-            on = st.toggle("On route (hands may use it)", value=bool(h.get("on_route", True)))
-            changed = (g != h["grip"]) or ((None if role == "none" else role) != h["role"]) or (on != h.get("on_route", True))
-            if changed:
-                h["grip"], h["role"], h["on_route"] = int(g), (None if role == "none" else role), bool(on)
-                refresh_observed()
-                st.rerun()
-            if st.button("Delete this hold"):
-                ss.holds = [x for x in ss.holds if x["id"] != h["id"]]
-                ss.selected = None
-                refresh_observed()
-                st.rerun()
-        st.markdown("#### Hold set")
-        colors = sorted({h.get("color") for h in ss.holds if h.get("color")})
-        if colors:
-            on_colors = sorted({h.get("color") for h in ss.holds if h.get("color") and h.get("on_route", True)})
-            pick = st.multiselect("Route colour filter (set routes are usually one colour; spray walls use all)",
-                                  colors, default=on_colors or colors, help="Only holds of the selected colours stay on route for hands. Inferred/manual holds are unaffected.")
-            if set(pick) != set(on_colors):
-                for h in ss.holds:
-                    if h.get("color"):
-                        h["on_route"] = h["color"] in pick
-                refresh_observed()
-                st.rerun()
-        c1, c2, c3 = st.columns(3)
-        if c1.button("Reset to auto-detected"):
-            ss.holds = [dict(h) for h in A["holds"]]
-            ss.selected = None
-            refresh_observed()
-            st.rerun()
-        if c2.button("Save as curated"):
-            with open(curated_path(A["cache_dir"]), "w") as f:
-                json.dump(ss.holds, f, indent=1)
-            ss.curated = True
-            st.success("Saved. This hold set now loads by default for this video.")
-        if c3.button("Re-detect sequence"):
-            refresh_observed()
-            st.rerun()
-        n_route = sum(1 for h in ss.holds if h.get("on_route", True))
-        st.caption(f"{len(ss.holds)} holds · {n_route} on route · "
-                   f"{sum(1 for h in ss.holds if h['source'] == 'dwell')} inferred from where the climber's hands dwelled · "
-                   f"{sum(1 for h in ss.holds if h['source'] == 'manual')} added manually")
-        df = pd.DataFrame([{"id": h["id"], "grip": h["grip"], "role": h["role"] or "", "on_route": h["on_route"], "source": h["source"]} for h in ss.holds])
-        st.dataframe(df, height=220, hide_index=True, width="stretch")
-
-# ----------------------------------------------------------------------------- tab 2: climber
-with tab_climber:
-    m = A["morphology"]
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        card("Arm span (measured)", f"{m['arm_span_px']:.0f} px", "fingertip to fingertip, robust 92nd-percentile across the clip")
-    with c2:
-        card("Leg length", f"{m['leg_len_px']:.0f} px" if m.get("leg_len_px") else "n/a", "thigh + shin")
-    with c3:
-        card("Span / height proxy", f"{m['ratios']['arm_span_over_height_proxy']:.2f}" if m["ratios"].get("arm_span_over_height_proxy") else "n/a", "calibration-free ratio (torso+legs as height proxy)")
-    with c4:
-        card("Pose detection", f"{m['pose_detection_rate']:.0%}", f"{m['n_pose_frames']} frames with a skeleton")
-    st.caption("All lengths are in this video's pixel space. Reach costs are ratios (hold distance ÷ arm span), so the pixel scale cancels. "
-               "Measured, not calibrated: no real-world units are claimed.")
-    v1, v2 = st.columns([1, 1])
-    with v1:
-        st.markdown("#### Pose tracking")
-        ov = os.path.join(A["cache_dir"], "overlay.mp4")
-        if os.path.exists(ov):
-            st.video(ov)
-        else:
-            st.info("Overlay video not rendered for this source.")
-    with v2:
-        st.markdown("#### Observed hand sequence (from wrist/index contact dwell)")
-        if ss.placements:
-            rows = []
-            for i, p in enumerate(ss.placements):
-                rows.append({"#": i + 1, "hand": "L" if p["hand"] == LEFT else "R", "hold": hid.get(p["hold_id"], {}).get("label", p["hold_id"]),
-                             "frame": p["frame"], "time (s)": round(p["frame"] / A["fps"], 2)})
-            st.dataframe(pd.DataFrame(rows), hide_index=True, height=min(400, 40 + 35 * len(rows)), width="stretch")
-        else:
-            st.warning("No hand contacts found with the current hold set. Add holds where the climber's hands were, or lower the reach envelope.")
-        sheet = None
-        if ss.placements and os.path.exists(os.path.join(A["cache_dir"], "pose.json")) and os.path.exists(os.path.join(A["cache_dir"], "stab.json")):
-            from sendit import stabilize as _stab
-            stab = _stab.load(os.path.join(A["cache_dir"], "stab.json"))
-            if stab["static"]:
-                stab = {**stab, "H": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]] * len(stab["H"])}
-            mapper = lambda i, _s=stab: _stab.holds_in_frame(ss.holds, _s, A["T"], i)
-            sheet = viz.contact_sheet(A["video"], load_pose(os.path.join(A["cache_dir"], "pose.json")), ss.placements, ss.holds, n=5, holds_for_frame=mapper)
-        if sheet is not None:
-            st.image(sheet, caption="Key frames at auto-detected placements (original camera frame)", width="stretch")
-    ctx = A.get("move_context") or []
-    if ctx:
-        with st.expander("Measured pose context per observed move (diagnostic, not in the objective)"):
-            st.dataframe(pd.DataFrame([{"move": i + 1, "support-arm elbow min (°)": (round(c["support_elbow_min_deg"]) if c["support_elbow_min_deg"] else None),
-                                        "hip travel (× arm span)": round(c["hip_travel_px"] / m["arm_span_px"], 2), "duration (s)": round(c["duration_frames"] / A["fps"], 2)}
-                                       for i, c in enumerate(ctx)]), hide_index=True, width="stretch")
-
-# ----------------------------------------------------------------------------- tab 3: optimize
-with tab_opt:
-    preset_row("opt")
-    top = st.columns([5, 3]) if PRESENT else st.columns([2, 1])
-    with top[1]:
-        route_hand = [h for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot"]
-        finish_opts = ["observed", "top"] + [str(h["id"]) for h in sorted(route_hand, key=lambda h: h["y"])]
-        ss.finish_choice = st.selectbox("Finish hold", finish_opts, index=finish_opts.index(ss.finish_choice) if ss.finish_choice in finish_opts else 0,
-                                        format_func=lambda v: {"observed": "highest hold the climber reached", "top": "top-most route hold"}.get(v, f"hold {v}"))
-    R = optimize(WEIGHTS, FEAS)
-    if "error" in R:
-        st.error(R["error"])
-        st.stop()
-    obs, opt, geo, cmp_ = R["observed"], R["optimized"], R["geometric"], R["comparison"]
-    if opt is None:
-        st.error("No feasible beta found even after relaxing the reach envelope. Check start/finish roles and route membership.")
-        st.stop()
-    finish_set = set(R["finish_ids"])
-    partial = bool(obs and obs["moves"] and not (set(obs["states"][-1]) & finish_set))
-    with top[1 if PRESENT else 0]:
-        if obs and obs["n_moves"] > 0:
-            imp = cmp_.get("improvement_frac", 0.0)
-            if PRESENT:
-                r1, r2 = st.columns(2), st.columns(2)
-                c1, c2, c3, c4 = r1[0], r1[1], r2[0], r2[1]
+            key = insight_key()
+            hid = hid_map()
+            R = compute()
+            if "error" in R or R.get("optimized") is None:
+                st.warning(T.NO_LINE_FOUND)
             else:
-                c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                card("Observed cost", f"{obs['total_cost']:.2f}", f"{obs['n_moves']} hand moves · max reach {obs['max_reach_frac']:.0%}", "obs")
-            with c2:
-                card("Optimized cost", f"{opt['total_cost']:.2f}", f"{opt['n_moves']} hand moves · max reach {opt['max_reach_frac']:.0%}", "opt")
-            with c3:
-                if partial:
-                    card("Cost reduction", "n/a", "clip ends before the finish: optimizer plans the rest of the route")
+                partial = is_partial(R)
+                if key not in ss.insight_cache:
+                    with st.spinner(T.INSIGHT_WORKING):
+                        A = ss.analysis
+                        morph, _ = body_morph()
+                        rep = injury.injury_report(R, hid, A.get("move_context"), A["fps"])
+                        summary = coach.summary_for_llm(R, hid, partial, move_context=A.get("move_context"), foot_events=ss.foot_events,
+                                                        pose=ss.pose, fps=A["fps"], board_angle_deg=ss.route["angle"],
+                                                        arm_span_m=ss.body.get("span_m"), height_m=ss.body.get("height_m"),
+                                                        injury=rep, gaps=tracking_gaps())
+                        txt = coach.llm_insights(summary)
+                        ss.insight_cache[key] = coach.parse_insights(txt) if txt else None
+                parsed = ss.insight_cache.get(key)
+                if parsed and (parsed.get("your_climb") or parsed.get("suggested")):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown(f"**{T.INSIGHT_YOUR}**")
+                        for line in parsed.get("your_climb", []):
+                            st.markdown(f"- {line}")
+                    with c2:
+                        st.markdown(f"**{T.INSIGHT_SUGGESTED}**")
+                        for line in parsed.get("suggested", []):
+                            st.markdown(f"- {line}")
+                    st.caption(T.INSIGHT_FOOTER)
                 else:
-                    card("Cost reduction", f"{imp:+.0%}" if not cmp_.get("same_sequence") else "0%", "(observed − optimized) ÷ observed, same objective")
-            with c4:
-                cx = cmp_.get("crux")
-                card("Highest-cost observed move", f"{cx['cost']:.2f}" if cx else "—",
-                     f"{'L' if cx and cx['hand'] == LEFT else 'R'} {hid.get(cx['from'], {}).get('label', '?') if cx else ''} → {hid.get(cx['to'], {}).get('label', '?') if cx else ''}", "crux")
-        else:
-            st.warning("No observed hand sequence to compare against; showing the optimized beta only.")
-    if R["feasibility"].max_reach_frac > FEAS.max_reach_frac + 1e-9:
-        st.caption(f"Reach envelope auto-widened to {R['feasibility'].max_reach_frac:.2f} × arm span because the climber demonstrated that reach on video.")
-    if opt.get("relaxed_to"):
-        st.warning(f"Graph was disconnected under the envelope; loosened to {opt['relaxed_to']:.2f} × arm span to find a path.")
+                    st.info(T.INSIGHT_UNAVAILABLE)
+                    for line in coach.rule_based(R, hid, partial):
+                        st.markdown(f"- {line}")
+        if st.button(T.INSIGHT_CLOSE, key="insight_close"):
+            ss.insight_open = False
+            st.rerun()
+        st.markdown("---")
 
-    with (top[0] if PRESENT else contextlib.nullcontext()):
-        show_hero(viz.render_comparison(bg, ss.holds, obs, opt, cmp_, ss.box, partial=partial))
+tab_route, tab_climb, tab_explore = st.tabs([T.TAB_ROUTE, T.TAB_CLIMB, T.TAB_EXPLORE])
 
-    # ---- simulated-morphology strip (driven by the demo presets / tab 4 slider)
-    if ss.sim_on_opt:
-        Rs = optimize(WEIGHTS, FEAS, ss.scale_pct / 100.0)
-        ps = Rs["optimized"]
-        if ps:
-            same = ps["states"] == opt["states"]
-            diff_h = sorted(set(ps["holds_used"]) ^ set(opt["holds_used"]))
-            st.markdown(f"##### Same route, simulated **{ss.scale_pct} %** reach — "
-                        + ("**different beta**: " + ", ".join(f"H{i}" for i in diff_h) if not same else "same sequence, higher cost")
-                        + f" · cost {opt['total_cost']:.2f} → {ps['total_cost']:.2f} · {opt['n_moves']} → {ps['n_moves']} moves")
-            sc1, sc2 = st.columns(2)
-            sc1.image(viz.render_beta_panel(bg, ss.holds, opt, "MEASURED climber · optimized beta", viz.C_OPTIMIZED, ss.box, crux=False), width="stretch")
-            sc2.image(viz.render_beta_panel(bg, ss.holds, ps, f"SIMULATED {ss.scale_pct} % reach · optimized beta", (255, 120, 200), ss.box, crux=False), width="stretch")
 
-    # ---- four-limb (hands + feet) plan, off by default
-    fb1, fb2 = st.columns([1, 3])
-    show_feet = fb1.toggle("Full-body plan (hands + feet)", key="show_feet")
-    fast_beam = fb2.checkbox("Faster approximate search (beam) when not precomputed", key="fast_beam",
-                             help="Exact A* takes ~15-20 s on a dense wall after an edit; beam search is faster but approximate and labelled as such.")
-    if show_feet:
-        fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1, "fourlimb_beam": 80} if fast_beam else {}
-        with st.spinner("Searching the hands + feet state space…"):
-            R4 = optimize(WEIGHTS, FEAS, 1.0, fourlimb=True, fl_kwargs=tuple(sorted(fl_kwargs.items())))
-        q = R4.get("optimized_4limb")
-        ss["_q4"] = q
-        if q is None:
-            st.error("No full-body plan found.")
-        else:
-            srch = q["search"]
-            method = ("exact A* search" if srch["exact"] else f"beam search (width {srch['beam']}, approximate)")
-            cq1, cq2, cq3, cq4 = st.columns(4)
-            with cq1:
-                card("Full-body plan cost", f"{q['total_cost']:.2f}", f"{q['n_hand_moves']} hand + {q['n_foot_moves']} foot moves", "opt")
-            with cq2:
-                card("Search", method, f"{srch['n_expanded']:,} states expanded · {srch['runtime_s']:.1f} s · est. {srch['est_states']:,.0f} joint states")
-            with cq3:
-                card("Feet used", ", ".join(f"H{i}" for i in q["feet_used"]) or "none (ground / cut loose)", "holds under the feet along the plan")
-            with cq4:
-                card("Hands-only plan", f"{opt['total_cost']:.2f}", "same hand objective without foot terms (not directly comparable)")
-            feet_obs = feet_for_result(ss.get("foot_events", []), obs) if obs else None
-            show_hero(viz.render_comparison(bg, ss.holds, obs, q, cmp_, ss.box, partial=partial,
-                                            feet_obs=feet_obs, feet_opt=q["feet_by_state"]))
-            st.caption("State = (left hand, right hand, left foot, right foot); a move relocates one limb. Feet must sit inside the "
-                       "climber's leg window below the hands (0.35–1.25 × body-height proxy) and a foot may cut loose at a cost. "
-                       "Mint squares = foot holds with the state numbers in which a foot is on them. Observed feet come from toe/ankle "
-                       "landmarks (blank = smearing, on the mat, or not detected).")
-            st.markdown(f"<span class='opt'><b>Full-body plan</b></span>: {sequence_text(q, hid)}", unsafe_allow_html=True)
-            with st.expander("Full-body plan cost breakdown"):
-                st.plotly_chart(cost_breakdown_chart([q], [viz.C_OPTIMIZED]), width="stretch")
-    q4_for_glance = ss.get("_q4") if show_feet else None
-    st.markdown("##### Optimization at a glance")
-    glance_strip(R, q4_for_glance)
-    details_ctx = st.expander("Details: crux, sequences, coaching, cost breakdown, graph", expanded=not PRESENT) if PRESENT else contextlib.nullcontext()
-    with details_ctx:
-        if cmp_.get("crux"):
-            st.markdown(f"**Predicted crux (highest-cost move under our model):** {cmp_['crux']['explanation']}")
-        if partial:
-            st.info("The observed sequence stops before the selected finish hold, so the optimized beta is a plan for the full route rather than a like-for-like comparison. Choose 'highest hold the climber reached' as the finish for a direct comparison.")
-        elif obs and cmp_.get("same_sequence"):
-            st.success("The observed beta already matches the optimizer's minimum-cost sequence for this climber.")
-        elif obs and cmp_.get("same_holds"):
-            st.info("Same holds as the observed beta, but with a different hand order.")
-        elif obs:
-            so = ", ".join(f"H{i}" for i in cmp_.get("only_observed", [])) or "none"
-            sp = ", ".join(f"H{i}" for i in cmp_.get("only_optimized", [])) or "none"
-            st.markdown(f"**Difference:** the optimizer drops **{so}** and adds **{sp}**; shared holds: {', '.join(f'H{i}' for i in cmp_.get('shared_holds', []))}.")
+# ============================================================================ STEP 1 · ROUTE
+with tab_route:
+    # ---- 1a. route image input (own route only)
+    if ss.source == T.SOURCE_OWN:
+        kind_pick = st.radio(T.ROUTE_KIND_LABEL, [T.ROUTE_KIND_PHOTO, T.ROUTE_KIND_SCREENSHOT], horizontal=True)
+        st.caption(T.ROUTE_KIND_WHY)
+        kind = "photo" if kind_pick == T.ROUTE_KIND_PHOTO else "screenshot"
+        up_img = st.file_uploader(T.ROUTE_UPLOAD_LABEL, type=["jpg", "jpeg", "png"])
+        if up_img is not None and ss.get("route_image_key") != up_img.name + str(up_img.size):
+            load_own_image(up_img, kind)
+            st.rerun()
+        if ss.route is not None and ss.route["kind"] != kind:
+            ss.route["kind"] = kind
+        if ss.get("route_msg"):
+            st.info(ss.route_msg)
 
-        st.markdown("##### Sequences")
-        st.markdown(f"<span class='obs'><b>Observed</b></span>: {sequence_text(obs, hid)}", unsafe_allow_html=True)
-        st.markdown(f"<span class='opt'><b>Optimized</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
-
-        st.markdown("##### Coaching insights")
-        from sendit.coach import rule_based, llm_rewrite, summary_for_llm, llm_available
-        for line in rule_based(R, hid, partial):
-            st.markdown(f"- {line}")
-        if (os.environ.get("XAI_API_KEY") or os.environ.get("GEMINI_API_KEY")) and _llm_ok():
-            if st.button("Explain with LLM (paraphrases the structured result only)"):
-                txt = llm_rewrite(summary_for_llm(R, hid, partial))
-                st.write(txt or "LLM unavailable; showing rule-based insights above.")
-        st.markdown("##### Where the cost comes from")
-        st.plotly_chart(cost_breakdown_chart([obs, opt], [viz.C_OBSERVED, viz.C_OPTIMIZED]), width="stretch")
-
-        e1, e2 = st.columns(2)
-        with e1:
-            with st.expander("Why not just the shortest geometric path?", expanded=False):
-                if geo:
-                    st.markdown(f"The pure shortest-distance path (no reach normalization, no grip, no per-move cost) scores **{geo['total_cost']:.2f}** under our objective "
-                                f"vs **{opt['total_cost']:.2f}** for the optimized beta ({geo['n_moves']} vs {opt['n_moves']} moves, max reach {geo['max_reach_frac']:.0%} vs {opt['max_reach_frac']:.0%}).")
-                    st.markdown(f"<span style='color:#be78ff'><b>Geometric</b></span>: {sequence_text(geo, hid)}", unsafe_allow_html=True)
-                    st.image(viz.render_beta_panel(bg, ss.holds, geo, "Shortest geometric path (baseline)", viz.C_GEOMETRIC, ss.box, crux=False), width="stretch")
-        with e2:
-            with st.expander("Personalized feasibility graph", expanded=False):
-                edges = hold_graph_edges(ss.holds, R["climber"], R["feasibility"])
-                st.image(viz.render_graph(bg, ss.holds, edges, opt, ss.box), width="stretch")
-                st.caption("An edge joins two holds this climber can hold simultaneously (span ≤ reach envelope). "
-                           "The search runs over hand-pair states; each state change moves one hand along one of these edges.")
-        with st.expander("Diff view (both betas on one wall)"):
-            st.image(viz.render_diff(bg, ss.holds, obs, opt, cmp_, ss.box), width="stretch")
-
-# ----------------------------------------------------------------------------- tab 4: personalize
-with tab_person:
-    st.markdown("#### Same route, different body")
-    st.caption("The climber's measured morphology is scaled to simulate a shorter or taller climber. Every feasible edge and every cost is recomputed; the optimizer re-plans.")
-    preset_row("person")
-    scale_pct = st.slider("Simulated effective reach (% of measured)", 70, 125, step=5, key="scale_pct")
-    Rm = optimize(WEIGHTS, FEAS, 1.0)
-    Rs = optimize(WEIGHTS, FEAS, scale_pct / 100.0)
-    pm, ps = Rm["optimized"], Rs["optimized"]
-    if pm and ps:
-        em = hold_graph_edges(ss.holds, Rm["climber"], Rm["feasibility"])
-        es = hold_graph_edges(ss.holds, Rs["climber"], Rs["feasibility"])
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            card("Measured climber", f"{pm['total_cost']:.2f}", f"{pm['n_moves']} moves · {len(em)} feasible hold pairs", "opt")
-        with c2:
-            card(f"Simulated {scale_pct}% reach", f"{ps['total_cost']:.2f}", f"{ps['n_moves']} moves · {len(es)} feasible hold pairs")
-        with c3:
-            same = pm["states"] == ps["states"]
-            card("Beta changes?", "no" if same else "YES", "different hold sequence" if not same else "same sequence, higher cost" if ps["total_cost"] > pm["total_cost"] else "same sequence")
-        with c4:
-            diff_h = sorted(set(ps["holds_used"]) ^ set(pm["holds_used"]))
-            card("Holds that differ", ", ".join(f"H{i}" for i in diff_h) if diff_h else "none", "symmetric difference of hold sets")
-        if ps.get("relaxed_to"):
-            st.warning(f"For the simulated climber the graph was disconnected at the chosen envelope; loosened to {ps['relaxed_to']:.2f}.")
-        left = viz.render_beta_panel(bg, ss.holds, pm, "MEASURED climber · optimized beta", viz.C_OPTIMIZED, ss.box, crux=False)
-        right = viz.render_beta_panel(bg, ss.holds, ps, f"SIMULATED {scale_pct}% reach · optimized beta", (255, 120, 200), ss.box, crux=False)
-        cc1, cc2 = st.columns(2)
-        cc1.image(left, width="stretch")
-        cc2.image(right, width="stretch")
-        st.markdown(f"<span class='opt'><b>Measured</b></span>: {sequence_text(pm, hid)}", unsafe_allow_html=True)
-        st.markdown(f"<span style='color:#ff78c8'><b>Simulated</b></span>: {sequence_text(ps, hid)}", unsafe_allow_html=True)
-        st.markdown("###### Cost of the same route across morphologies")
-        rows = []
-        for pct in (70, 80, 90, 100, 110, 120):
-            rr = optimize(WEIGHTS, FEAS, pct / 100.0)["optimized"]
-            if rr:
-                rows.append({"reach %": pct, "optimized cost": round(rr["total_cost"], 2), "moves": rr["n_moves"],
-                             "max reach": f"{rr['max_reach_frac']:.0%}", "holds": " ".join(f"H{i}" for i in rr["holds_used"]),
-                             "envelope relaxed": (f"{rr['relaxed_to']:.2f}" if rr["relaxed_to"] else "")})
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if ss.route is None:
+        st.info(T.HEADER_NO_ROUTE)
     else:
-        st.error("Could not compute a beta for one of the climbers.")
+        route = ss.route
+        # ---- 1b. board angle (stored with the route; display-only difficulty scaling in step 2)
+        angle = st.number_input(T.BOARD_ANGLE_LABEL, min_value=0, max_value=70, value=int(route["angle"]), step=5)
+        st.caption(T.BOARD_ANGLE_CAPTION)
+        if int(angle) != route["angle"]:
+            route["angle"] = int(angle)
+            ss.insight_cache = {}
 
-# ----------------------------------------------------------------------------- tab 5: method
-with tab_method:
-    st.markdown(r"""
-#### What is optimized
-A **state** is the pair of holds under the climber's hands, $s=(h_L, h_R)$. An **action** moves one hand to another
-on-route hold. We run exact **Dijkstra** from the observed start state to any state with a hand on the finish hold.
+        for w in kilter.role_warnings(ss.holds):
+            st.warning(w)
 
-#### Edge feasibility (personalized)
-A move is allowed only if the hand-to-hand span after the move is within the climber's **reach envelope**
-(default 0.85 × their measured arm span, auto-widened to any span they demonstrated on video), the hand does not
-drop more than 0.2 × arm span, and the target is on the route and not foot-only.
+        left, right = st.columns([3, 2])
+        # ---- 1c. hold editor (click canvas on the route image, role colours)
+        with left:
+            st.markdown(f"#### {T.HOLDS_HEADER}")
+            mode = st.radio(T.CLICK_MODE_LABEL, T.CLICK_MODES, horizontal=True, index=T.CLICK_MODES.index(ss.edit_mode))
+            if mode != ss.edit_mode:
+                ss.edit_mode, ss.move_pending = mode, None
+            if mode == T.MODE_MOVE and ss.move_pending is not None:
+                st.info(T.MOVE_STEP2.format(hold=label_of(hid_map(), ss.move_pending)))
+            else:
+                st.caption(T.MODE_HINTS[mode])
+            img = viz.to_pil(route["image"])
+            viz.draw_holds(img, ss.holds, selected=ss.move_pending if mode == T.MODE_MOVE else ss.selected,
+                           fill="role", label_mode="label")
+            box = viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0])
+            img = img.crop(box)
+            from streamlit_image_coordinates import streamlit_image_coordinates
+            click = streamlit_image_coordinates(img, key="hold_canvas", width=CANVAS_W)
+            if click and click != ss.last_click:
+                ss.last_click = click
+                shown_w = click.get("width") or CANVAS_W
+                sc = shown_w / img.width
+                cx, cy = box[0] + click["x"] / sc, box[1] + click["y"] / sc
+                dists = [(np.hypot(h["x"] - cx, h["y"] - cy), h["id"]) for h in ss.holds]
+                nearest = min(dists)[1] if dists else None
+                near_px = 0.04 * max(route["image"].shape[:2])
+                near_enough = bool(dists) and min(dists)[0] < near_px
+                if mode == T.MODE_PICK:
+                    ss.selected = nearest if near_enough else None
+                elif mode == T.MODE_ADD:
+                    nid = next_id(ss.holds)
+                    ss.holds.append(make_hold(nid, cx, cy, source="manual"))
+                    ss.selected = nid
+                    refresh_observed()
+                elif mode == T.MODE_REMOVE and near_enough:
+                    ss.holds = [h for h in ss.holds if h["id"] != nearest]
+                    ss.selected = None
+                    refresh_observed()
+                elif mode == T.MODE_MOVE:
+                    if ss.move_pending is None:
+                        ss.move_pending = nearest if near_enough else None
+                    else:
+                        h = hid_map().get(ss.move_pending)
+                        if h is not None:
+                            h["x"], h["y"] = float(cx), float(cy)
+                            refresh_observed()
+                        ss.selected, ss.move_pending = ss.move_pending, None
+                st.rerun()
+            st.caption(T.LEGEND_ROLES)
 
-#### Movement cost (dimensionless, per move)
-$$C = w_r\left(\tfrac{\text{span}/\text{arm span}}{0.4}\right)^2 + w_g\,\tfrac{\text{grip}-1}{4} + w_m + w_t\,\tfrac{\text{travel}}{\text{arm span}} + w_d\,\text{dir} + w_x\,\text{cross} + w_f\,\text{foot}$$
+        # ---- 1d. selected hold: role and grip rating
+        with right:
+            st.markdown(f"#### {T.SELECTED_HEADER}")
+            hid = hid_map()
+            if ss.selected is None or ss.selected not in hid:
+                st.info(T.SELECT_HINT)
+            else:
+                h = hid[ss.selected]
+                st.markdown(T.HOLD_LINE.format(label=h["label"], role=T.role_name(h.get("role"))))
+                role_pick = st.selectbox(T.ROLE_LABEL, T.ROLE_ORDER, index=T.ROLE_ORDER.index(h.get("role") if h.get("role") in T.ROLE_ORDER else None),
+                                         format_func=T.role_name)
+                g = st.select_slider(T.GRIP_LABEL, options=[1, 2, 3, 4, 5], value=int(h.get("grip", 3)),
+                                     format_func=lambda v: f"{v} · {GRIP_LABELS[v]}")
+                st.caption(T.GRIP_CAPTION)
+                if (role_pick != h.get("role")) or (g != h.get("grip", 3)):
+                    h["role"], h["grip"], h["on_route"] = role_pick, int(g), True
+                    refresh_observed()
+                    st.rerun()
+                if st.button(T.REMOVE_HOLD):
+                    ss.holds = [x for x in ss.holds if x["id"] != h["id"]]
+                    ss.selected = None
+                    refresh_observed()
+                    st.rerun()
 
-* **reach** — quadratic in the normalized span: the same wall distance costs more for a smaller climber.
-* **grip** — the user's 1–5 hold rating (subjective input; 1 → 0 penalty, 5 → full penalty).
-* **move** — fixed cost per hand movement, so the optimizer does not ladder through every hold.
-* **travel / direction / cross** — geometry of the moving hand: distance, sideways-or-down component, crossed hands.
-* **foot** — lower-body context proxy: no hold inside the climber's leg window below the target hold.
+            # ---- 1e. hold set actions
+            st.markdown(f"#### {T.ALL_HOLDS_HEADER}")
+            b1, b2 = st.columns(2)
+            if b1.button(T.RESET_HOLDS, width="stretch"):
+                ss.holds = kilter.detect_route_holds(route["image"])
+                ss.selected, ss.move_pending = None, None
+                refresh_observed()
+                st.toast(T.RESET_TOAST)
+                st.rerun()
+            if b2.button(T.SAVE_ROUTE, width="stretch"):
+                save_route_file(route["dir"], ss.holds, route["angle"], ss.body, route["name"])
+                st.toast(T.SAVED_TOAST)
+            st.caption(T.HOLD_COUNT.format(n=len(ss.holds), manual=sum(1 for h in ss.holds if h.get("source") == "manual")))
 
-The observed sequence is scored with the **same** function, so the comparison is apples to apples.
+            # ---- 1f. hand placements from the video (status line + sequence expander)
+            if ss.analysis is None:
+                st.caption(T.NO_VIDEO_YET)
+            else:
+                n_pl = len(ss.placements or [])
+                st.markdown(f"**{T.DETECTED_PLACEMENTS.format(n=n_pl)}**" if n_pl else f"**{T.DETECTED_NONE}**")
+                with st.expander(T.SHOW_SEQUENCE):
+                    A = ss.analysis
+                    if n_pl:
+                        rows = [{T.SEQUENCE_COLUMNS["#"]: i + 1, T.SEQUENCE_COLUMNS["hand"]: "L" if p["hand"] == LEFT else "R",
+                                 T.SEQUENCE_COLUMNS["hold"]: label_of(hid, p["hold_id"]), T.SEQUENCE_COLUMNS["time"]: round(p["frame"] / A["fps"], 2)}
+                                for i, p in enumerate(ss.placements)]
+                        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+                        pose_path, stab_path = os.path.join(A["cache_dir"], "pose.json"), os.path.join(A["cache_dir"], "stab.json")
+                        if os.path.exists(pose_path) and os.path.exists(stab_path) and os.path.exists(A["video"]):
+                            stab = stab_mod.load(stab_path)
+                            if stab["static"]:
+                                stab = {**stab, "H": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]] * len(stab["H"])}
+                            sheet = viz.contact_sheet(A["video"], load_pose(pose_path), ss.placements, ss.holds, n=5,
+                                                      holds_for_frame=lambda i, _s=stab: holds_for_video_frame(ss.holds, A, _s, i), fps=A["fps"])
+                            if sheet is not None:
+                                st.image(sheet, caption=T.KEY_FRAMES_CAPTION, width="stretch")
 
-#### Scope and honesty
-This prototype optimizes the **major hand-hold sequence**. Feet and body pose enter only as contextual cost
-modifiers; explicit four-limb configuration-space search is the natural next step. Costs are heuristic, not energy or
-force; hold ratings are user preferences; 2D pose has perspective error. Computer vision is imperfect in arbitrary gyms,
-so every CV stage can be corrected by hand.
-""")
+        # ---- 1g. hold table (collapsed)
+        with st.expander(T.HOLD_TABLE_EXPANDER):
+            df = pd.DataFrame([{T.HOLD_TABLE_COLUMNS["label"]: h["label"], T.HOLD_TABLE_COLUMNS["grip"]: h.get("grip", 3),
+                                T.HOLD_TABLE_COLUMNS["role"]: T.role_name(h.get("role"))} for h in ss.holds])
+            st.dataframe(df, hide_index=True, width="stretch")
+
+
+# ============================================================================ STEP 2 · CLIMB
+with tab_climb:
+    if ss.route is None:
+        st.info(T.NEED_ROUTE_FIRST)
+    else:
+        route = ss.route
+        # ---- 2a. video input (own route) and alignment
+        if ss.source == T.SOURCE_OWN:
+            up_vid = st.file_uploader(T.VIDEO_UPLOAD_LABEL, type=["mp4", "mov", "m4v"])
+            st.caption(T.VIDEO_GUIDE)
+            if up_vid is not None and st.button(T.ANALYZE_BUTTON, type="primary"):
+                analyze_own_video(up_vid)
+                st.rerun()
+        if ss.pending is not None and ss.align and ss.align.get("pending"):
+            # ---- 2b. corner method: four board corners in the route image and in one video frame
+            st.warning(T.ALIGN_FAILED if ss.align.get("auto_failed") else T.ALIGN_SCREENSHOT)
+            from streamlit_image_coordinates import streamlit_image_coordinates
+            which = "route" if len(ss.corners["route"]) < 4 else "video"
+            k = len(ss.corners[which])
+            if k < 4:
+                st.info(T.CORNER_INSTRUCTION.format(corner=T.CORNER_NAMES[k], which=T.CORNER_ROUTE if which == "route" else T.CORNER_VIDEO, k=k + 1))
+            cc1, cc2 = st.columns(2)
+            for col, key_, img_bgr, title in ((cc1, "route", route["image"], T.CORNER_ROUTE_TITLE), (cc2, "video", ss.pending["bg"], T.CORNER_VIDEO_TITLE)):
+                with col:
+                    st.markdown(f"**{title}**")
+                    pil = viz.to_pil(img_bgr)
+                    d = viz.ImageDraw.Draw(pil)
+                    for (px, py) in ss.corners[key_]:
+                        d.ellipse([px - 12, py - 12, px + 12, py + 12], outline=(255, 80, 80), width=6)
+                    click = streamlit_image_coordinates(pil, key=f"corner_{key_}", width=CANVAS_W)
+                    if click and click != ss.last_corner_click[key_] and key_ == which and k < 4:
+                        ss.last_corner_click[key_] = click
+                        sc = (click.get("width") or CANVAS_W) / pil.width
+                        ss.corners[key_].append((click["x"] / sc, click["y"] / sc))
+                        st.rerun()
+            if st.button(T.CORNER_RESET):
+                ss.corners = {"route": [], "video": []}
+                st.rerun()
+            if len(ss.corners["route"]) == 4 and len(ss.corners["video"]) == 4:
+                H = register.homography_from_corners(ss.corners["video"], ss.corners["route"])
+                finish_alignment(H, {"method": "corners", "inliers": 4})
+                st.rerun()
+        elif ss.align:
+            if ss.align.get("method") == "auto":
+                st.success(T.ALIGN_MATCHED.format(n=ss.align.get("inliers", 0)) if ss.align.get("inliers") else T.ALIGN_MATCHED_SHORT)
+            elif ss.align.get("method") == "corners":
+                st.success(T.ALIGN_CORNERS_DONE)
+
+        # ---- 2c. optional body inputs (override the video measurement, supply the pixel scale)
+        with st.expander(T.BODY_EXPANDER):
+            st.caption(T.BODY_EXPLAIN + " " + T.BODY_ZERO_HINT)
+            unit = U.unit_label(ss.units)
+            bc1, bc2 = st.columns(2)
+            changed_body = False
+            for col, key_, label in ((bc1, "height_m", T.HEIGHT_LABEL), (bc2, "span_m", T.SPAN_LABEL)):
+                cur = ss.body.get(key_)
+                shown = float(round(U.from_metres(cur, ss.units), 1)) if cur else 0.0
+                v = col.number_input(label.format(unit=unit), min_value=0.0, max_value=300.0, value=shown,
+                                     step=1.0 if ss.units == U.METRIC else 0.5, key=f"body_{key_}_{ss.units}")
+                new = U.to_metres(float(v), ss.units) if v > 0 else None
+                if (new is None) != (cur is None) or (new is not None and abs(new - (cur or 0)) > 1e-4):
+                    ss.body[key_] = new
+                    changed_body = True
+            if changed_body:
+                ss.insight_cache = {}
+                if os.path.exists(route_file(route["dir"])):
+                    save_route_file(route["dir"], ss.holds, route["angle"], ss.body, route["name"])
+                st.rerun()
+
+        if ss.analysis is None:
+            st.info(T.NEED_ANALYSIS)
+        else:
+            A = ss.analysis
+            hid = hid_map()
+            morph, px_per_m = body_morph()
+
+            # ---- 2d. video player: original / skeleton overlay, full width
+            view = st.radio(T.VIDEO_VIEW_LABEL, [T.VIDEO_ORIGINAL, T.VIDEO_SKELETON], horizontal=True, key="video_view")
+            ov = os.path.join(A["cache_dir"], "overlay.mp4")
+            vpath = A["video"] if view == T.VIDEO_ORIGINAL else (ov if os.path.exists(ov) else A["video"])
+            if os.path.exists(vpath):
+                st.video(vpath)
+            else:
+                st.info(T.VIDEO_MISSING)
+
+            # ---- 2e. measurements card row
+            m1, m2, m3 = st.columns([1, 1, 2])
+            with m1:
+                card(T.CARD_SPAN, U.length_text(morph["arm_span_px"], px_per_m, morph["arm_span_px"], ss.units) if px_per_m else T.CARD_FROM_VIDEO, T.CARD_SPAN_SUB)
+            with m2:
+                card(T.CARD_LEG, U.length_text(morph.get("leg_len_px"), px_per_m, morph["arm_span_px"], ss.units), T.CARD_LEG_SUB)
+            with m3:
+                st.radio(T.STYLE_LABEL, T.STYLES, horizontal=True, key="style", on_change=apply_style)
+                st.caption(T.STYLE_CAPTIONS[ss.style])
+            if px_per_m is None:
+                st.caption(T.CARD_RELATIVE_PROMPT)
+
+            # ---- 2f. your climb vs suggested
+            R = compute()
+            if "error" in R or R.get("optimized") is None:
+                st.error(T.NO_LINE_FOUND)
+            else:
+                obs, opt, cmp_ = R["observed"], R["optimized"], R["comparison"]
+                partial = is_partial(R)
+                gaps = tracking_gaps()
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    card(T.CARD_YOURS, T.moves_text(obs["n_moves"]) if obs else "—", "", "obs")
+                with c2:
+                    card(T.CARD_SUGGESTED, T.moves_text(opt["n_moves"]), "", "opt")
+                with c3:
+                    if not obs:
+                        card(T.CARD_SAVED, "—", T.NO_OBSERVED)
+                    elif partial:
+                        card(T.CARD_SAVED, T.CARD_SAVED_PARTIAL, T.CARD_SAVED_PARTIAL_SUB)
+                    elif cmp_.get("same_sequence"):
+                        card(T.CARD_SAVED, T.CARD_SAME, T.CARD_SAME_SUB)
+                    else:
+                        card(T.CARD_SAVED, f"{max(0.0, cmp_.get('improvement_frac', 0.0)):.0%}", T.CARD_SAVED_SUB)
+                mult = kilter.difficulty_multiplier(route["angle"])
+                st.caption(T.DIFFICULTY_LINE.format(angle=route["angle"], mult=f"{mult:.1f}"))
+                if partial or gaps:
+                    st.warning(T.PARTIAL_BANNER.format(ranges=coach.gaps_text(gaps)) if gaps else T.PARTIAL_BANNER_CLIP)
+                if not obs:
+                    st.info(T.NO_OBSERVED)
+                if opt.get("relaxed_to"):
+                    st.info(T.RELAXED)
+                cmp_img = viz.render_comparison(route["image"], ss.holds, obs, opt, cmp_, viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0]),
+                                                partial=partial, max_height=COMPARISON_MAX_H, titles=(T.CARD_YOURS, T.CARD_SUGGESTED))
+                st.image(cmp_img)
+                st.caption(viz.LEGEND_LINE)
+                with st.expander(T.FULL_SIZE):
+                    st.image(viz.render_comparison(route["image"], ss.holds, obs, opt, cmp_, viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0]),
+                                                   partial=partial, titles=(T.CARD_YOURS, T.CARD_SUGGESTED)), width="stretch")
+
+                # ---- 2g. why + tips
+                why = coach.why_block(R, hid, partial)
+                if why:
+                    st.markdown(f"**{T.WHY_HEADER}**")
+                    st.markdown(" ".join(why))
+                st.markdown(f"**{T.TIPS_HEADER}**")
+                for line in coach.rule_based(R, hid, partial):
+                    st.markdown(f"- {line}")
+
+                # ---- 2h. injury flags (heuristic)
+                st.markdown(f"**{T.INJURY_HEADER}** · {T.INJURY_DISCLAIMER}")
+                rep = injury.injury_report(R, hid, A.get("move_context"), A["fps"])
+                i1, i2 = st.columns(2)
+                for col, title, rows in ((i1, T.CARD_YOURS, rep["observed"]), (i2, T.CARD_SUGGESTED, rep["suggested"])):
+                    with col:
+                        st.markdown(f"*{title}*")
+                        if rows:
+                            st.dataframe(pd.DataFrame([{T.INJURY_COLUMNS["severity"]: r["severity"], T.INJURY_COLUMNS["move"]: r["move"],
+                                                        T.INJURY_COLUMNS["why"]: r["why"], T.INJURY_COLUMNS["instead"]: r["instead"]} for r in rows]),
+                                         hide_index=True, width="stretch")
+                        else:
+                            st.caption(T.INJURY_NONE)
+                if rep["suggested"]:
+                    st.caption(T.INJURY_SUGGESTED_HAS)
+
+                # ---- 2i. collapsed extras
+                with st.expander(T.SAFER_EXPANDER):
+                    for tip in T.SAFER_TIPS:
+                        st.markdown(f"- {tip}")
+                with st.expander(T.LIMITS_EXPANDER):
+                    for line in T.LIMITS:
+                        st.markdown(f"- {line}")
+                with st.expander(T.MEASURE_EXPANDER):
+                    ratio = morph["ratios"].get("arm_span_over_height_proxy")
+                    st.markdown(f"- {T.APE_LABEL}: **{ratio:.2f}**" if ratio else f"- {T.APE_LABEL}: —")
+                    st.markdown(f"- {T.TRACKED_LABEL.format(pct=round(100 * morph['pose_detection_rate']))}")
+                    ctx = A.get("move_context") or []
+                    if ctx:
+                        st.markdown(f"**{T.POSE_TABLE_HEADER}**")
+                        st.dataframe(pd.DataFrame([{T.POSE_TABLE_COLUMNS["move"]: i + 1,
+                                                    T.POSE_TABLE_COLUMNS["elbow"]: (round(c["support_elbow_min_deg"]) if c["support_elbow_min_deg"] else None),
+                                                    T.POSE_TABLE_COLUMNS["hip"]: round(c["hip_travel_px"] / morph["arm_span_px"], 2),
+                                                    T.POSE_TABLE_COLUMNS["duration"]: round(c["duration_frames"] / A["fps"], 2)} for i, c in enumerate(ctx)]),
+                                     hide_index=True, width="stretch")
+                with st.expander(T.DETAILS_EXPANDER):
+                    st.markdown(f"**{T.DETAILS_RAW_HEADER}**")
+                    rows = [{"line": T.CARD_YOURS, "cost": round(obs["total_cost"], 2), "moves": obs["n_moves"], "max reach (× arm span)": round(obs["max_reach_frac"], 2)}] if obs else []
+                    rows.append({"line": T.CARD_SUGGESTED, "cost": round(opt["total_cost"], 2), "moves": opt["n_moves"], "max reach (× arm span)": round(opt["max_reach_frac"], 2)})
+                    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+                    if cmp_.get("crux"):
+                        st.markdown(f"- crux: {cmp_['crux']['explanation']}")
+                    if R["feasibility"].max_reach_frac > current_feas().max_reach_frac + 1e-9:
+                        st.caption(T.AUTO_WIDENED.format(r=R["feasibility"].max_reach_frac))
+                    st.markdown(f"**{T.DETAILS_SEQUENCES}**")
+                    st.markdown(f"<span class='obs'><b>{T.CARD_YOURS}</b></span>: {sequence_text(obs, hid)}", unsafe_allow_html=True)
+                    st.markdown(f"<span class='opt'><b>{T.CARD_SUGGESTED}</b></span>: {sequence_text(opt, hid)}", unsafe_allow_html=True)
+                    if obs:
+                        st.markdown(f"**{T.DETAILS_DIFF}**")
+                        st.image(viz.render_diff(route["image"], ss.holds, obs, opt, cmp_, viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0])), width="stretch")
+                with st.expander(T.HOW_EXPANDER):
+                    st.markdown(T.HOW_IT_WORKS)
+                    st.markdown(f"**{T.HOW_FACTS_HEADER}**")
+                    srch = opt.get("search", {})
+                    n_hand = sum(1 for h in ss.holds if h.get("on_route", True) and h.get("role") != "foot")
+                    facts = [T.HOW_FACT_FRAMES.format(n=A["n_frames"], fps=A["fps"]),
+                             T.HOW_FACT_CAMERA_STATIC if A["camera"]["static"] else T.HOW_FACT_CAMERA_MOVING.format(px=A["camera"]["max_shift_px"]),
+                             T.HOW_FACT_TRACKED.format(pct=morph["pose_detection_rate"]),
+                             T.HOW_FACT_HOLDS.format(n=len(ss.holds)),
+                             T.HOW_FACT_ALIGN.format(method=(ss.align or {}).get("method", "unknown")),
+                             T.HOW_FACT_STATE.format(n=n_hand),
+                             T.HOW_FACT_ENVELOPE.format(r=R["feasibility"].max_reach_frac),
+                             T.HOW_FACT_SEARCH.format(method="exact A*" if srch.get("exact", True) else f"beam {srch.get('beam')}",
+                                                      n=srch.get("n_expanded", 0), ms=srch.get("runtime_s", 0) * 1000)]
+                    for f_ in facts:
+                        st.markdown(f"- {f_}")
+                with st.expander(T.ADVANCED_EXPANDER):
+                    st.caption(T.ADVANCED_CAPTION)
+                    for k, (label, lo, hi, step) in T.SLIDERS.items():
+                        st.slider(label, lo, hi, step=step, key=k)
+                    st.slider(T.REACH_LIMIT_LABEL, 0.5, 1.1, step=0.05, key="max_reach")
+                    st.slider(T.DOWN_LIMIT_LABEL, 0.0, 0.6, step=0.05, key="max_down")
+                    st.checkbox(T.MATCH_FINISH_LABEL, key="match_finish")
+
+
+# ============================================================================ STEP 3 · EXPLORE
+with tab_explore:
+    if ss.route is None or ss.analysis is None:
+        st.info(T.NEED_ROUTE_FIRST if ss.route is None else T.NEED_ANALYSIS)
+    else:
+        route, A, hid = ss.route, ss.analysis, hid_map()
+        morph, px_per_m = body_morph()
+        st.markdown(f"#### {T.EXPLORE_HEADER}")
+        st.caption(T.EXPLORE_CAPTION)
+        # ---- 3a. presets
+        p1, p2, p3 = st.columns([1, 1, 2])
+        p1.button(T.PRESET_SHORTER, on_click=apply_preset, args=("shorter",), width="stretch", help=T.PRESET_SHORTER_EXPLAIN)
+        p2.button(T.PRESET_FEET, on_click=apply_preset, args=("feet",), width="stretch")
+        p3.caption(T.PRESET_SHORTER_EXPLAIN)
+
+        # ---- 3b. body-size slider (real units when a scale exists, else percent)
+        span_m = morph["arm_span_px"] / px_per_m if px_per_m else None
+        if span_m:
+            unit = U.unit_label(ss.units)
+            span_u = U.from_metres(span_m, ss.units)
+            lo, hi = int(round(span_u * 0.7)), int(round(span_u * 1.25))
+            cur = int(round(span_u * ss.scale_pct / 100))
+            val = st.slider(T.SIM_SLIDER_UNITS.format(unit=unit), lo, hi, value=min(hi, max(lo, cur)), step=1)
+            new_pct = int(round(100 * val / span_u))
+            sim_m = U.to_metres(val, ss.units)
+            st.caption(T.SIM_CAPTION_UNITS.format(span=U.format_length(span_m, ss.units), sim=U.format_length(sim_m, ss.units),
+                                                  delta=U.format_delta(sim_m - span_m, ss.units)))
+        else:
+            val = st.slider(T.SIM_SLIDER_PCT, 70, 125, value=int(ss.scale_pct), step=5)
+            new_pct = int(val)
+        if new_pct != ss.scale_pct:
+            ss.scale_pct = new_pct
+            st.rerun()
+        if ss.scale_pct != 100 and st.button(T.BACK_TO_MEASURED, on_click=apply_preset, args=("measured",)):
+            pass
+
+        # ---- 3c. measured vs simulated
+        Rm = compute(1.0)
+        Rs = compute(ss.scale_pct / 100.0)
+        pm, ps = Rm.get("optimized"), Rs.get("optimized")
+        if not pm or not ps:
+            st.error(T.SIM_FAIL)
+        else:
+            if span_m:
+                amount = U.format_length(abs(span_m * (1 - ss.scale_pct / 100)), ss.units)
+            else:
+                amount = f"{abs(100 - ss.scale_pct)} %"
+            sim_label = T.CARD_YOU if ss.scale_pct == 100 else (T.CARD_SIM_SHORTER if ss.scale_pct < 100 else T.CARD_SIM_TALLER).format(amount=amount)
+            same = pm["states"] == ps["states"]
+            diff_h = sorted(set(ps["holds_used"]) ^ set(pm["holds_used"]))
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                card(T.CARD_YOU, T.moves_text(pm["n_moves"]), "", "opt")
+            with c2:
+                card(sim_label, T.moves_text(ps["n_moves"]), "")
+            with c3:
+                card(T.CARD_DIFFERENT, T.CARD_DIFF_NO if same else T.CARD_DIFF_YES,
+                     T.CARD_DIFF_YES_SUB if not same else (T.CARD_DIFF_NO_SUB if ps["total_cost"] > pm["total_cost"] + 1e-9 else T.CARD_DIFF_SAME_SUB))
+            with c4:
+                card(T.CARD_DIFF_HOLDS, ", ".join(label_of(hid, i) for i in diff_h) if diff_h else T.CARD_DIFF_HOLDS_NONE, "")
+            box = viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0])
+            left = viz.render_beta_panel(route["image"], ss.holds, pm, T.PANEL_YOU, viz.C_OPTIMIZED, box, crux=False)
+            rightp = viz.render_beta_panel(route["image"], ss.holds, ps, sim_label, (255, 120, 200), box, crux=False)
+            cc1, cc2 = st.columns(2)
+            cc1.image(viz._limit_height(left, COMPARISON_MAX_H) if hasattr(viz, "_limit_height") else left, width="stretch")
+            cc2.image(viz._limit_height(rightp, COMPARISON_MAX_H) if hasattr(viz, "_limit_height") else rightp, width="stretch")
+            st.caption(T.SIM_LEGEND)
+            with st.expander(T.SWEEP_EXPANDER):
+                st.markdown(f"<span class='opt'><b>{T.CARD_YOU}</b></span>: {sequence_text(pm, hid)}", unsafe_allow_html=True)
+                st.markdown(f"<span style='color:#ff78c8'><b>{sim_label}</b></span>: {sequence_text(ps, hid)}", unsafe_allow_html=True)
+                if st.button(T.SWEEP_BUTTON):
+                    rows = []
+                    for pct in (70, 80, 90, 100, 110, 120):
+                        rr = compute(pct / 100.0).get("optimized")
+                        if rr:
+                            rows.append({T.SWEEP_COLUMNS["pct"]: pct, T.SWEEP_COLUMNS["moves"]: rr["n_moves"],
+                                         T.SWEEP_COLUMNS["holds"]: " ".join(label_of(hid, i) for i in rr["holds_used"])})
+                    ss.sweep_rows = rows
+                if ss.sweep_rows:
+                    st.dataframe(pd.DataFrame(ss.sweep_rows), hide_index=True, width="stretch")
+
+        # ---- 3d. feet plan (hands + feet), off by default
+        st.markdown("---")
+        pre = fourlimb_precomputed(Rm) if "error" not in Rm else False
+        est = 1 if pre else 15
+        show_feet = st.toggle(T.FEET_TOGGLE, key="show_feet")
+        st.caption(T.FEET_WAIT_FAST if pre else T.FEET_WAIT_SLOW.format(s=est))
+        if show_feet:
+            fl_kwargs = {"fourlimb_exact_threshold": 0, "fourlimb_max_expansions": 1, "fourlimb_beam": 80} if ss.fast_beam else {}
+            with st.spinner(T.FEET_SPINNER.format(s=est)):
+                R4 = compute(1.0, fourlimb=True, fl_kwargs=tuple(sorted(fl_kwargs.items())))
+            q = R4.get("optimized_4limb")
+            if q is None:
+                st.error(T.FEET_NONE)
+            else:
+                obs = R4.get("observed")
+                f1, f2 = st.columns(2)
+                with f1:
+                    card(T.CARD_WITH_FEET, T.CARD_WITH_FEET_SUB.format(h=q["n_hand_moves"], f=q["n_foot_moves"]), "", "opt")
+                with f2:
+                    card(T.CARD_FEET_ON, ", ".join(label_of(hid, i) for i in q["feet_used"]) or T.CARD_FEET_NONE, "")
+                feet_obs = feet_for_result(ss.foot_events, obs) if obs else None
+                box = viz.crop_box(ss.holds, route["image"].shape[1], route["image"].shape[0])
+                st.image(viz.render_comparison(route["image"], ss.holds, obs, q, R4["comparison"], box, partial=is_partial(R4),
+                                               feet_obs=feet_obs, feet_opt=q["feet_by_state"], max_height=COMPARISON_MAX_H,
+                                               titles=(T.CARD_YOURS, T.CARD_SUGGESTED)))
+                st.caption(viz.LEGEND_LINE + " · " + T.FEET_LEGEND)
+                with st.expander(T.FEET_DETAILS):
+                    st.markdown(f"<span class='opt'><b>{T.CARD_SUGGESTED}</b></span>: {sequence_text(q, hid)}", unsafe_allow_html=True)
+        with st.expander(T.ADVANCED_FEET):
+            st.checkbox(T.BEAM_LABEL, key="fast_beam")

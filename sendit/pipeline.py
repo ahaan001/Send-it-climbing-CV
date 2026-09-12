@@ -35,8 +35,10 @@ def _np(o):
 def analyze_video(video_path: str, cache_dir: str, force: bool = False,
                   progress: Optional[Callable[[str, float], None]] = None,
                   contact_radius_frac: float = 0.12, min_contact_s: float = 0.25,
-                  wall_type: str = "auto") -> dict:
-    """wall_type: 'auto' | 'led' (lit Kilter/Moon board) | 'color' (normal wall)."""
+                  wall_type: str = "auto", detect_holds: bool = True) -> dict:
+    """wall_type: 'auto' | 'led' (lit Kilter/Moon board) | 'color' (normal wall).
+    detect_holds=False skips hold detection and the observed sequence: the caller
+    supplies holds from a route image afterwards via apply_route()."""
     os.makedirs(cache_dir, exist_ok=True)
     pose_path = os.path.join(cache_dir, "pose.json")
     pose_wall_path = os.path.join(cache_dir, "pose_wall.json")
@@ -95,45 +97,50 @@ def analyze_video(video_path: str, cache_dir: str, force: bool = False,
     morph = pose_mod.morphology_from_pose(pose_wall)
 
     # 4. holds
-    report("holds", 0.0)
-    led = holds_mod.detect_led_holds(video_path) if wall_type in ("auto", "led") else []
-    if wall_type == "auto" and len(led) >= 5:
-        # A lit board has a few small glowing rings on a dark panel: lit pixels are a tiny fraction of the
-        # board mask (~0.4 % on our Kilter clip). A normal wall with colourful holds is several times higher.
-        lit_frac = holds_mod.lit_fraction_in_board(video_path)
-        auto_led = lit_frac is not None and lit_frac < 0.007
-    else:
-        auto_led = False
-    if wall_type == "led" or auto_led:
-        method = "led"
-        H0 = T @ np.array(stab_used["H"][0], np.float64)
-        for h in led:
-            x, y = stabilize.warp_points(H0, [(h["x"], h["y"])])[0]
-            h["x"], h["y"] = float(x), float(y)
-        holds = led
-    else:
-        method = "color"
-        holds = holds_mod.detect_color_holds(bg)
-    holds = holds_mod.merge_close_holds(holds, 0.07 * morph["arm_span_px"])
-    inferred = holds_mod.dwell_inferred_holds(pose_wall, morph["arm_span_px"], holds)
-    if method == "led":
-        for h in inferred:  # on a lit board the route IS the lit holds; keep suggestions off-route
-            h["on_route"] = False
-    holds = holds + inferred
-    report("holds", 1.0)
-
-    # 5. observed beta
-    report("observed beta", 0.0)
     min_contact_frames = max(4, int(round(min_contact_s * pose["fps"])))
-    events = beta_mod.contact_events(pose_wall, holds, morph["arm_span_px"], contact_radius_frac, min_contact_frames)
-    placements = beta_mod.observed_placements(events)
-    beta_mod.default_roles(holds, placements)
-    hid = {h["id"]: h for h in holds}
-    placements = beta_mod.truncate_at_finish(placements, [h["id"] for h in holds if h.get("role") == "finish"],
-                                             morph["arm_span_px"], hid=hid)
-    context = beta_mod.measured_move_context(pose_wall, placements)
-    foot_events = beta_mod.observed_feet(pose_wall, holds, morph["arm_span_px"], contact_radius_frac, min_contact_frames)
-    report("observed beta", 1.0)
+    if not detect_holds:
+        method, holds, events, placements, context, foot_events = "route_image", [], [], [], [], []
+        report("holds", 1.0)
+        report("observed beta", 1.0)
+    else:
+        report("holds", 0.0)
+        led = holds_mod.detect_led_holds(video_path) if wall_type in ("auto", "led") else []
+        if wall_type == "auto" and len(led) >= 5:
+            # A lit board has a few small glowing rings on a dark panel: lit pixels are a tiny fraction of the
+            # board mask (~0.4 % on our Kilter clip). A normal wall with colourful holds is several times higher.
+            lit_frac = holds_mod.lit_fraction_in_board(video_path)
+            auto_led = lit_frac is not None and lit_frac < 0.007
+        else:
+            auto_led = False
+        if wall_type == "led" or auto_led:
+            method = "led"
+            H0 = T @ np.array(stab_used["H"][0], np.float64)
+            for h in led:
+                x, y = stabilize.warp_points(H0, [(h["x"], h["y"])])[0]
+                h["x"], h["y"] = float(x), float(y)
+            holds = led
+        else:
+            method = "color"
+            holds = holds_mod.detect_color_holds(bg)
+        holds = holds_mod.merge_close_holds(holds, 0.07 * morph["arm_span_px"])
+        inferred = holds_mod.dwell_inferred_holds(pose_wall, morph["arm_span_px"], holds)
+        if method == "led":
+            for h in inferred:  # on a lit board the route IS the lit holds; keep suggestions off-route
+                h["on_route"] = False
+        holds = holds + inferred
+        report("holds", 1.0)
+
+        # 5. observed beta
+        report("observed beta", 0.0)
+        events = beta_mod.contact_events(pose_wall, holds, morph["arm_span_px"], contact_radius_frac, min_contact_frames)
+        placements = beta_mod.observed_placements(events)
+        beta_mod.default_roles(holds, placements)
+        hid = {h["id"]: h for h in holds}
+        placements = beta_mod.truncate_at_finish(placements, [h["id"] for h in holds if h.get("role") == "finish"],
+                                                 morph["arm_span_px"], hid=hid)
+        context = beta_mod.measured_move_context(pose_wall, placements)
+        foot_events = beta_mod.observed_feet(pose_wall, holds, morph["arm_span_px"], contact_radius_frac, min_contact_frames)
+        report("observed beta", 1.0)
 
     analysis = {
         "video": os.path.abspath(video_path),
@@ -151,6 +158,7 @@ def analyze_video(video_path: str, cache_dir: str, force: bool = False,
         "move_context": context,
         "settings": {"contact_radius_frac": contact_radius_frac, "min_contact_frames": min_contact_frames},
         "cache_dir": os.path.abspath(cache_dir),
+        "pose_file": "pose_wall.json",
     }
     with open(an_path, "w") as f:
         json.dump(analysis, f, indent=1, default=_np)
@@ -162,10 +170,73 @@ def load_analysis(cache_dir: str) -> dict:
         return json.load(f)
 
 
+def load_analysis_pose(analysis: dict) -> dict:
+    """The pose in the frame the analysis lives in (route image frame after apply_route)."""
+    return pose_mod.load_pose(os.path.join(analysis["cache_dir"], analysis.get("pose_file", "pose_wall.json")))
+
+
+def _transform_pose(pose: dict, H) -> dict:
+    H = np.asarray(H, np.float64)
+    out = {k: v for k, v in pose.items() if k != "frames"}
+    frames = {}
+    for i, lm in pose["frames"].items():
+        names = list(lm.keys())
+        pts = stabilize.warp_points(H, [lm[n][:2] for n in names])
+        frames[int(i)] = {n: [float(pts[j][0]), float(pts[j][1]), lm[n][2]] for j, n in enumerate(names)}
+    out["frames"] = frames
+    return out
+
+
+def apply_route(analysis: dict, route_holds: list, H_route, route_image_path: str | None = None,
+                alignment: dict | None = None) -> dict:
+    """Move an analysis into the route image's coordinate frame.
+
+    H_route maps the video's wall/canvas coordinates (the frame of background.png
+    and pose_wall.json) to route-image pixels. Holds come only from the route
+    image; the video contributes pose and the observed sequence. Everything
+    downstream (morphology, contacts, optimisation) then runs in the route frame."""
+    cache = analysis["cache_dir"]
+    pose_wall = pose_mod.load_pose(os.path.join(cache, "pose_wall.json"))
+    H = np.asarray(H_route, np.float64)
+    pose_route = _transform_pose(pose_wall, H)
+    pose_mod.save_pose(pose_route, os.path.join(cache, "pose_route.json"))
+    morph = pose_mod.morphology_from_pose(pose_route)
+    holds = [dict(h) for h in route_holds]
+    s = analysis.get("settings", {})
+    rad, minf = s.get("contact_radius_frac", 0.12), s.get("min_contact_frames", 4)
+    events = beta_mod.contact_events(pose_route, holds, morph["arm_span_px"], rad, minf)
+    placements = beta_mod.observed_placements(events)
+    hid = {h["id"]: h for h in holds}
+    placements = beta_mod.truncate_at_finish(placements, [h["id"] for h in holds if h.get("role") == "finish"],
+                                             morph["arm_span_px"], hid=hid)
+    context = beta_mod.measured_move_context(pose_route, placements)
+    foot_events = beta_mod.observed_feet(pose_route, holds, morph["arm_span_px"], rad, minf)
+    analysis.update({
+        "pose_file": "pose_route.json", "H_route": H.tolist(),
+        "route_image": os.path.abspath(route_image_path) if route_image_path else None,
+        "alignment": alignment or {"method": "unknown"},
+        "morphology": morph, "hold_method": "route_image", "holds": holds,
+        "events": events, "placements": placements, "move_context": context, "foot_events": foot_events,
+    })
+    with open(os.path.join(cache, "analysis.json"), "w") as f:
+        json.dump(analysis, f, indent=1, default=_np)
+    return analysis
+
+
+def holds_for_video_frame(holds: list, analysis: dict, stab: dict, frame_idx: int) -> list:
+    """Route-frame holds mapped into the pixel frame of one original video frame
+    (route -> canvas via the inverse route homography, canvas -> frame via stabilisation)."""
+    if analysis.get("H_route") is not None and holds:
+        Hinv = np.linalg.inv(np.asarray(analysis["H_route"], np.float64))
+        pts = stabilize.warp_points(Hinv, [(h["x"], h["y"]) for h in holds])
+        holds = [{**h, "x": float(x), "y": float(y)} for h, (x, y) in zip(holds, pts)]
+    return stabilize.holds_in_frame(holds, stab, analysis["T"], frame_idx)
+
+
 def recompute_observed(analysis: dict, holds: list, pose: dict | None = None) -> list:
     """Re-run contact detection against an edited hold set (after manual correction)."""
     if pose is None:
-        pose = pose_mod.load_pose(os.path.join(analysis["cache_dir"], "pose_wall.json"))
+        pose = load_analysis_pose(analysis)
     s = analysis.get("settings", {})
     events = beta_mod.contact_events(pose, holds, analysis["morphology"]["arm_span_px"],
                                      s.get("contact_radius_frac", 0.12), s.get("min_contact_frames", 4))
@@ -178,7 +249,7 @@ def recompute_observed(analysis: dict, holds: list, pose: dict | None = None) ->
 def recompute_feet(analysis: dict, holds: list, pose: dict | None = None) -> list:
     """Foot contact events against an edited hold set (measured, not suggested)."""
     if pose is None:
-        pose = pose_mod.load_pose(os.path.join(analysis["cache_dir"], "pose_wall.json"))
+        pose = load_analysis_pose(analysis)
     s = analysis.get("settings", {})
     return beta_mod.observed_feet(pose, holds, analysis["morphology"]["arm_span_px"],
                                   s.get("contact_radius_frac", 0.12), s.get("min_contact_frames", 4))
