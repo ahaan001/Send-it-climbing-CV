@@ -37,6 +37,18 @@ def click_tab(page, label):
     wait_idle(page, 1.5)
 
 
+def scroll_shots(page, prefix, steps=3, dy=900):
+    """Streamlit scrolls inside its own container, so full_page captures only the viewport:
+    scroll the main area and take one viewport shot per step."""
+    page.mouse.move(800, 500)
+    for i in range(1, steps + 1):
+        page.mouse.wheel(0, dy)
+        page.wait_for_timeout(700)
+        shot(page, f"{prefix}_{i}.png", full=False)
+    page.mouse.wheel(0, -dy * steps)
+    page.wait_for_timeout(400)
+
+
 def exceptions(page):
     return page.locator("[data-testid='stException']").count()
 
@@ -52,6 +64,7 @@ def main():
         shot(page, "01_route.png")
         click_tab(page, TAB_CLIMB)
         shot(page, "02_climb.png")
+        scroll_shots(page, "02_climb_scroll", steps=3)
         click_tab(page, TAB_EXPLORE)
         shot(page, "03_explore.png")
 
@@ -73,6 +86,7 @@ def main():
         page.get_by_role("button", name="Show feet too", exact=True).click()
         wait_idle(page, 6)
         shot(page, "06_explore_feet.png")
+        scroll_shots(page, "06_explore_feet_scroll", steps=2)
         print("exceptions after presets:", exceptions(page))
 
         # --- photo + video upload path through the UI (optional)
