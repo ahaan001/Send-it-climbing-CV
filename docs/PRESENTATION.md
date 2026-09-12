@@ -20,8 +20,9 @@ wall while the camera pans."
 **0:40–1:00 — Human in the loop** *(tab 1 · Route & holds)*
 "CV is imperfect in a real gym: these two dark start holds were missed by colour detection, and recovered from where
 the climber's hands actually stopped. Anything that's still wrong you fix with a click — add, remove, move a hold —
-and you rate how good each hold feels, 1 to 5. That rating goes straight into the objective." *(rate one hold a 5,
-show the optimizer re-routing)*
+and you rate how good each hold feels, 1 to 5. That rating goes straight into the objective." *(select **H25** —
+the second hold on the cyan line — set grip to 5; switch to tab 3: the optimizer now goes through H20 and H29 instead.
+Reset H25 to 3 afterwards. Rating **H16** a 5 re-routes through H12/H18 if you want a second example.)*
 
 **1:00–1:35 — The optimization** *(tab 3, open the feasibility graph expander briefly)*
 "Here is the core. A state is the pair of holds under the two hands. A move relocates one hand. A move is *feasible*

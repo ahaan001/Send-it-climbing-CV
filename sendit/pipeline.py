@@ -97,7 +97,14 @@ def analyze_video(video_path: str, cache_dir: str, force: bool = False,
     # 4. holds
     report("holds", 0.0)
     led = holds_mod.detect_led_holds(video_path) if wall_type in ("auto", "led") else []
-    if wall_type == "led" or (wall_type == "auto" and len(led) >= 5):
+    if wall_type == "auto" and len(led) >= 5:
+        # A lit board has a few small glowing rings on a dark panel: lit pixels are a tiny fraction of the
+        # board mask (~0.4 % on our Kilter clip). A normal wall with colourful holds is several times higher.
+        lit_frac = holds_mod.lit_fraction_in_board(video_path)
+        auto_led = lit_frac is not None and lit_frac < 0.007
+    else:
+        auto_led = False
+    if wall_type == "led" or auto_led:
         method = "led"
         H0 = T @ np.array(stab_used["H"][0], np.float64)
         for h in led:

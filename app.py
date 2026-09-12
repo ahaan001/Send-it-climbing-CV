@@ -91,7 +91,12 @@ def _run_with_progress(video, cache, wall_type, force):
         bar.progress(min(1.0, lo + (hi - lo) * frac), text=f"{stage} … {frac:.0%}")
 
     t = time.time()
-    analysis = analyze_video(video, cache, force=force, progress=prog, wall_type=wall_type)
+    try:
+        analysis = analyze_video(video, cache, force=force, progress=prog, wall_type=wall_type)
+    except Exception as e:  # malformed video, no person visible, etc.
+        bar.empty()
+        st.error(f"Could not analyze this video: {e}. Make sure it is a readable video with one climber visible.")
+        st.stop()
     bar.progress(1.0, text=f"Done in {time.time() - t:.1f}s")
     # overlay video for the climber tab
     try:

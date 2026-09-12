@@ -218,3 +218,25 @@ def merge_close_holds(holds: list, min_dist: float):
     for i, h in enumerate(out):
         h["id"], h["label"] = i, f"H{i}"
     return out
+
+
+def lit_fraction_in_board(video_path: str, n_samples: int = 3):
+    """Fraction of strongly saturated+bright pixels inside the dark board mask,
+    averaged over a few frames. Used by the auto wall-type rule."""
+    from hold_detection import detect_board_bbox
+    cap = cv2.VideoCapture(video_path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    vals = []
+    for frac in np.linspace(0.05, 0.95, n_samples):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(total * frac))
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        mask = detect_board_bbox(fr)
+        if mask is None or (mask > 0).mean() < 0.1:
+            continue
+        hsv = cv2.cvtColor(fr, cv2.COLOR_BGR2HSV)
+        lit = (hsv[..., 1] > 130) & (hsv[..., 2] > 150)
+        vals.append(float(lit[mask > 0].mean()))
+    cap.release()
+    return float(np.median(vals)) if vals else None
