@@ -1,0 +1,1211 @@
+{
+ "video": "/Users/ahaan/Send-it-climbing-CV/demo_assets/skeleton_overlay.mp4",
+ "w": 644,
+ "h": 1368,
+ "fps": 29.996,
+ "n_frames": 761,
+ "canvas_w": 735,
+ "canvas_h": 1636,
+ "T": [
+  [
+   1.0,
+   0.0,
+   41.0
+  ],
+  [
+   0.0,
+   1.0,
+   10.0
+  ],
+  [
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "camera": {
+  "static": false,
+  "max_shift_px": 219.11912536621094,
+  "ref_idx": 380
+ },
+ "timing": {
+  "pose_s": 0.001680135726928711,
+  "stabilize_s": 0.019381999969482422,
+  "total_s": 0.04977107048034668
+ },
+ "morphology": {
+  "arm_span_px": 342.6377157825118,
+  "shoulder_width_px": 67.42957704220862,
+  "upper_arm_px": 64.80113014632808,
+  "forearm_px": 56.4461077789304,
+  "hand_px": 16.356831444893114,
+  "torso_px": 126.34268586371067,
+  "thigh_px": 80.66664934328867,
+  "shin_px": 82.71117353337368,
+  "leg_len_px": 163.37782287666235,
+  "height_proxy_px": 289.720508740373,
+  "n_pose_frames": 562,
+  "pose_detection_rate": 0.7385019710906702,
+  "ratios": {
+   "arm_span_over_height_proxy": 1.1826491582256589,
+   "forearm_over_upper_arm": 0.8710667183036604,
+   "leg_over_arm_span": 0.4768238152170204
+  }
+ },
+ "hold_method": "color",
+ "wall_type": "color",
+ "holds": [
+  {
+   "id": 0,
+   "x": 156.0,
+   "y": 1459.7083333333333,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H0",
+   "area": 32.0,
+   "hue": 17,
+   "color": "orange"
+  },
+  {
+   "id": 1,
+   "x": 145.67916666666665,
+   "y": 1432.625,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H1",
+   "area": 40.0,
+   "hue": 17,
+   "color": "orange"
+  },
+  {
+   "id": 2,
+   "x": 208.9151515151515,
+   "y": 1399.7030303030301,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H2",
+   "area": 27.5,
+   "hue": 88,
+   "color": "blue"
+  },
+  {
+   "id": 3,
+   "x": 554.9589041095891,
+   "y": 1178.1750380517503,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H3",
+   "area": 109.5,
+   "hue": 30,
+   "color": "yellow"
+  },
+  {
+   "id": 4,
+   "x": 407.7451564828614,
+   "y": 1159.2672627918528,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H4",
+   "area": 335.5,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 5,
+   "x": 522.536398467433,
+   "y": 1158.4846743295018,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H5",
+   "area": 87.0,
+   "hue": 32,
+   "color": "yellow"
+  },
+  {
+   "id": 6,
+   "x": 591.4545157602481,
+   "y": 1153.5732484076434,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H6",
+   "area": 1020.5,
+   "hue": 44,
+   "color": "green"
+  },
+  {
+   "id": 7,
+   "x": 479.9092071611253,
+   "y": 1152.306763285024,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H7",
+   "area": 1173.0,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 8,
+   "x": 440.5045871559633,
+   "y": 1080.3518209619126,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H8",
+   "area": 1199.0,
+   "hue": 27,
+   "color": "yellow"
+  },
+  {
+   "id": 9,
+   "x": 673.6777497900923,
+   "y": 1070.1502099076406,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H9",
+   "area": 1985.0,
+   "hue": 43,
+   "color": "green"
+  },
+  {
+   "id": 10,
+   "x": 508.2574047954866,
+   "y": 1061.25317348378,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H10",
+   "area": 709.0,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 11,
+   "x": 194.85395306447936,
+   "y": 1037.7372977899292,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H11",
+   "area": 731.5,
+   "hue": 7,
+   "color": "red"
+  },
+  {
+   "id": 12,
+   "x": 391.8031914893617,
+   "y": 1000.3758865248227,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H12",
+   "area": 282.0,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 13,
+   "x": 672.2739583333333,
+   "y": 973.596875,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H13",
+   "area": 160.0,
+   "hue": 7,
+   "color": "red"
+  },
+  {
+   "id": 14,
+   "x": 90.7631426920855,
+   "y": 969.3830155979202,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H14",
+   "area": 288.5,
+   "hue": 9,
+   "color": "orange"
+  },
+  {
+   "id": 15,
+   "x": 483.37010286714815,
+   "y": 968.9638870650033,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H15",
+   "area": 761.5,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 16,
+   "x": 378.9507735583685,
+   "y": 964.0548523206751,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H16",
+   "area": 237.0,
+   "hue": 27,
+   "color": "yellow"
+  },
+  {
+   "id": 17,
+   "x": 526.0553963705826,
+   "y": 930.7736389684814,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H17",
+   "area": 1396.0,
+   "hue": 43,
+   "color": "green"
+  },
+  {
+   "id": 18,
+   "x": 406.5726759116589,
+   "y": 909.2100667693887,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H18",
+   "area": 324.5,
+   "hue": 28,
+   "color": "yellow"
+  },
+  {
+   "id": 19,
+   "x": 178.35573940020683,
+   "y": 908.7480753763069,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H19",
+   "area": 2901.0,
+   "hue": 7,
+   "color": "red"
+  },
+  {
+   "id": 20,
+   "x": 419.82806324110675,
+   "y": 869.0500658761528,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H20",
+   "area": 506.0,
+   "hue": 27,
+   "color": "yellow"
+  },
+  {
+   "id": 21,
+   "x": 239.9914454277286,
+   "y": 852.1383480825958,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H21",
+   "area": 565.0,
+   "hue": 8,
+   "color": "orange"
+  },
+  {
+   "id": 22,
+   "x": 87.48,
+   "y": 847.84,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H22",
+   "area": 50.0,
+   "hue": 23,
+   "color": "yellow"
+  },
+  {
+   "id": 23,
+   "x": 607.7992424242424,
+   "y": 846.1401515151515,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H23",
+   "area": 44.0,
+   "hue": 88,
+   "color": "blue"
+  },
+  {
+   "id": 24,
+   "x": 453.0599384032219,
+   "y": 821.729921819474,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H24",
+   "area": 703.5,
+   "hue": 44,
+   "color": "green"
+  },
+  {
+   "id": 25,
+   "x": 337.7731348979202,
+   "y": 810.6586529288303,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H25",
+   "area": 873.5,
+   "hue": 26,
+   "color": "yellow"
+  },
+  {
+   "id": 26,
+   "x": 420.3868312757201,
+   "y": 785.2181069958848,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H26",
+   "area": 40.5,
+   "hue": 177,
+   "color": "red"
+  },
+  {
+   "id": 27,
+   "x": 594.0610932475885,
+   "y": 781.250803858521,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H27",
+   "area": 1244.0,
+   "hue": 7,
+   "color": "red"
+  },
+  {
+   "id": 28,
+   "x": 542.1048321048321,
+   "y": 768.3501228501228,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H28",
+   "area": 407.0,
+   "hue": 44,
+   "color": "green"
+  },
+  {
+   "id": 29,
+   "x": 372.8167938931298,
+   "y": 759.8231552162849,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H29",
+   "area": 393.0,
+   "hue": 27,
+   "color": "yellow"
+  },
+  {
+   "id": 30,
+   "x": 516.1572327044025,
+   "y": 713.7232704402514,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H30",
+   "area": 26.5,
+   "hue": 87,
+   "color": "blue"
+  },
+  {
+   "id": 31,
+   "x": 473.47677902621723,
+   "y": 711.0250936329587,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H31",
+   "area": 445.0,
+   "hue": 43,
+   "color": "green"
+  },
+  {
+   "id": 32,
+   "x": 368.0102983492352,
+   "y": 695.9939421475086,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H32",
+   "area": 1100.5,
+   "hue": 26,
+   "color": "yellow"
+  },
+  {
+   "id": 33,
+   "x": 529.8751431844215,
+   "y": 647.0400916380297,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H33",
+   "area": 145.5,
+   "hue": 176,
+   "color": "red"
+  },
+  {
+   "id": 34,
+   "x": 469.5719557195572,
+   "y": 640.7749077490774,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H34",
+   "area": 135.5,
+   "hue": 45,
+   "color": "green"
+  },
+  {
+   "id": 35,
+   "x": 388.92396313364054,
+   "y": 637.7498079877112,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H35",
+   "area": 868.0,
+   "hue": 27,
+   "color": "yellow"
+  },
+  {
+   "id": 36,
+   "x": 678.615468409586,
+   "y": 635.6993464052288,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H36",
+   "area": 153.0,
+   "hue": 5,
+   "color": "red"
+  },
+  {
+   "id": 37,
+   "x": 328.60429201764936,
+   "y": 579.6690734055355,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H37",
+   "area": 831.0,
+   "hue": 26,
+   "color": "yellow"
+  },
+  {
+   "id": 38,
+   "x": 518.4285714285714,
+   "y": 571.3333333333334,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H38",
+   "area": 84.0,
+   "hue": 93,
+   "color": "blue"
+  },
+  {
+   "id": 39,
+   "x": 469.38416666666666,
+   "y": 564.1583333333333,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H39",
+   "area": 400.0,
+   "hue": 44,
+   "color": "green"
+  },
+  {
+   "id": 40,
+   "x": 377.21204620462044,
+   "y": 558.3597359735974,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H40",
+   "area": 202.0,
+   "hue": 176,
+   "color": "red"
+  },
+  {
+   "id": 41,
+   "x": 300.14797136038186,
+   "y": 538.7629276054097,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H41",
+   "area": 838.0,
+   "hue": 25,
+   "color": "yellow"
+  },
+  {
+   "id": 42,
+   "x": 704.8791018998272,
+   "y": 534.119170984456,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H42",
+   "area": 96.5,
+   "hue": 21,
+   "color": "orange"
+  },
+  {
+   "id": 43,
+   "x": 400.35416666666663,
+   "y": 517.7621212121212,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H43",
+   "area": 880.0,
+   "hue": 43,
+   "color": "green"
+  },
+  {
+   "id": 44,
+   "x": 489.5868902439024,
+   "y": 493.00254065040644,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H44",
+   "area": 328.0,
+   "hue": 91,
+   "color": "blue"
+  },
+  {
+   "id": 45,
+   "x": 298.1082251082251,
+   "y": 471.5550401978973,
+   "grip": 3,
+   "on_route": true,
+   "role": "finish",
+   "source": "color",
+   "label": "H45",
+   "area": 1078.0,
+   "hue": 25,
+   "color": "yellow"
+  },
+  {
+   "id": 46,
+   "x": 386.6145833333333,
+   "y": 470.8723958333333,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H46",
+   "area": 192.0,
+   "hue": 177,
+   "color": "red"
+  },
+  {
+   "id": 47,
+   "x": 376.31920460491887,
+   "y": 423.6758241758242,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H47",
+   "area": 637.0,
+   "hue": 41,
+   "color": "green"
+  },
+  {
+   "id": 48,
+   "x": 594.2086874409821,
+   "y": 388.43783443500155,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H48",
+   "area": 529.5,
+   "hue": 91,
+   "color": "blue"
+  },
+  {
+   "id": 49,
+   "x": 180.9497035762096,
+   "y": 357.9868043602983,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H49",
+   "area": 871.5,
+   "hue": 42,
+   "color": "green"
+  },
+  {
+   "id": 50,
+   "x": 513.8384105960265,
+   "y": 349.6339955849889,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H50",
+   "area": 377.5,
+   "hue": 8,
+   "color": "orange"
+  },
+  {
+   "id": 51,
+   "x": 721.2904841402337,
+   "y": 340.04006677796326,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H51",
+   "area": 299.5,
+   "hue": 6,
+   "color": "red"
+  },
+  {
+   "id": 52,
+   "x": 669.0088862943504,
+   "y": 335.53434520334696,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H52",
+   "area": 2569.5,
+   "hue": 6,
+   "color": "red"
+  },
+  {
+   "id": 53,
+   "x": 428.33875338753387,
+   "y": 321.3676603432701,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H53",
+   "area": 369.0,
+   "hue": 90,
+   "color": "blue"
+  },
+  {
+   "id": 54,
+   "x": 19.038542990258364,
+   "y": 274.89326556543836,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H54",
+   "area": 393.5,
+   "hue": 5,
+   "color": "red"
+  },
+  {
+   "id": 55,
+   "x": 242.32192648922685,
+   "y": 253.97845373891,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H55",
+   "area": 131.5,
+   "hue": 42,
+   "color": "green"
+  },
+  {
+   "id": 56,
+   "x": 233.70810810810812,
+   "y": 227.7207207207207,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H56",
+   "area": 92.5,
+   "hue": 40,
+   "color": "green"
+  },
+  {
+   "id": 57,
+   "x": 612.3751664447403,
+   "y": 104.85424988903682,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H57",
+   "area": 3004.0,
+   "hue": 93,
+   "color": "blue"
+  },
+  {
+   "id": 58,
+   "x": 26.403016591251884,
+   "y": 84.06244343891403,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H58",
+   "area": 552.5,
+   "hue": 46,
+   "color": "green"
+  },
+  {
+   "id": 59,
+   "x": 407.2899990924766,
+   "y": 70.63340593520283,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H59",
+   "area": 3673.0,
+   "hue": 4,
+   "color": "red"
+  },
+  {
+   "id": 60,
+   "x": 214.8916372202591,
+   "y": 9.943462897526501,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "color",
+   "label": "H60",
+   "area": 141.5,
+   "hue": 5,
+   "color": "red"
+  },
+  {
+   "id": 61,
+   "x": 127.0636215209961,
+   "y": 1094.1681213378906,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "dwell",
+   "label": "H61",
+   "dwell_count": 1
+  },
+  {
+   "id": 62,
+   "x": 323.65486907958984,
+   "y": 1085.7251281738281,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "dwell",
+   "label": "H62",
+   "dwell_count": 2
+  },
+  {
+   "id": 63,
+   "x": 152.15647506713867,
+   "y": 525.0779266357422,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "dwell",
+   "label": "H63",
+   "dwell_count": 1
+  },
+  {
+   "id": 64,
+   "x": 52.77911949157715,
+   "y": 1261.3309631347656,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "dwell",
+   "label": "H64",
+   "dwell_count": 1
+  }
+ ],
+ "events": [
+  {
+   "hand": "RIGHT",
+   "hold_id": 62,
+   "start": 0,
+   "end": 10,
+   "frames": 11
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 61,
+   "start": 6,
+   "end": 16,
+   "frames": 11
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 62,
+   "start": 18,
+   "end": 30,
+   "frames": 13
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 12,
+   "start": 42,
+   "end": 52,
+   "frames": 11
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 12,
+   "start": 57,
+   "end": 96,
+   "frames": 36
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 20,
+   "start": 264,
+   "end": 279,
+   "frames": 16
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 20,
+   "start": 264,
+   "end": 288,
+   "frames": 25
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 25,
+   "start": 339,
+   "end": 356,
+   "frames": 18
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 29,
+   "start": 340,
+   "end": 348,
+   "frames": 9
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 29,
+   "start": 350,
+   "end": 359,
+   "frames": 10
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 29,
+   "start": 361,
+   "end": 412,
+   "frames": 52
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 25,
+   "start": 374,
+   "end": 382,
+   "frames": 9
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 21,
+   "start": 410,
+   "end": 416,
+   "frames": 7
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 29,
+   "start": 415,
+   "end": 439,
+   "frames": 25
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 32,
+   "start": 421,
+   "end": 435,
+   "frames": 15
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 35,
+   "start": 446,
+   "end": 580,
+   "frames": 135
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 35,
+   "start": 537,
+   "end": 547,
+   "frames": 11
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 35,
+   "start": 583,
+   "end": 601,
+   "frames": 19
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 45,
+   "start": 640,
+   "end": 654,
+   "frames": 15
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 63,
+   "start": 671,
+   "end": 680,
+   "frames": 10
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 63,
+   "start": 682,
+   "end": 688,
+   "frames": 7
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 64,
+   "start": 729,
+   "end": 760,
+   "frames": 32
+  }
+ ],
+ "placements": [
+  {
+   "hand": "RIGHT",
+   "hold_id": 62,
+   "frame": 0,
+   "end": 10
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 61,
+   "frame": 6,
+   "end": 16
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 12,
+   "frame": 42,
+   "end": 52
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 20,
+   "frame": 264,
+   "end": 279
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 20,
+   "frame": 264,
+   "end": 288
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 25,
+   "frame": 339,
+   "end": 356
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 29,
+   "frame": 340,
+   "end": 348
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 21,
+   "frame": 410,
+   "end": 416
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 32,
+   "frame": 421,
+   "end": 435
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 35,
+   "frame": 446,
+   "end": 580
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 35,
+   "frame": 537,
+   "end": 547
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 45,
+   "frame": 640,
+   "end": 654
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 63,
+   "frame": 671,
+   "end": 680
+  }
+ ],
+ "move_context": [
+  {
+   "support_elbow_min_deg": 159.72670076926593,
+   "support_elbow_mean_deg": 167.03601473737146,
+   "hip_travel_px": 62.10745285249834,
+   "duration_frames": 6
+  },
+  {
+   "support_elbow_min_deg": 107.83736651491624,
+   "support_elbow_mean_deg": 144.2799704094058,
+   "hip_travel_px": 175.92161672097717,
+   "duration_frames": 36
+  },
+  {
+   "support_elbow_min_deg": 25.881317054328502,
+   "support_elbow_mean_deg": 97.14040327516014,
+   "hip_travel_px": 1292.1974937794696,
+   "duration_frames": 222
+  },
+  {
+   "support_elbow_min_deg": 176.28043523864378,
+   "support_elbow_mean_deg": 176.28043523864378,
+   "hip_travel_px": 0.0,
+   "duration_frames": 0
+  },
+  {
+   "support_elbow_min_deg": 132.03341650310514,
+   "support_elbow_mean_deg": 168.49950444947075,
+   "hip_travel_px": 142.0250500501942,
+   "duration_frames": 75
+  },
+  {
+   "support_elbow_min_deg": 158.82928009177806,
+   "support_elbow_mean_deg": 165.77518250523204,
+   "hip_travel_px": 0.9876406906274077,
+   "duration_frames": 1
+  },
+  {
+   "support_elbow_min_deg": 147.55163014475076,
+   "support_elbow_mean_deg": 169.70572836176146,
+   "hip_travel_px": 261.6359706853141,
+   "duration_frames": 70
+  },
+  {
+   "support_elbow_min_deg": 149.72659221723148,
+   "support_elbow_mean_deg": 160.72281621250218,
+   "hip_travel_px": 62.90366238809194,
+   "duration_frames": 11
+  },
+  {
+   "support_elbow_min_deg": 154.97622900222822,
+   "support_elbow_mean_deg": 173.31069431159546,
+   "hip_travel_px": 124.0460834761256,
+   "duration_frames": 25
+  },
+  {
+   "support_elbow_min_deg": 22.530183806708354,
+   "support_elbow_mean_deg": 121.66263003671413,
+   "hip_travel_px": 445.5369423481923,
+   "duration_frames": 91
+  },
+  {
+   "support_elbow_min_deg": null,
+   "support_elbow_mean_deg": null,
+   "hip_travel_px": 401.94787572817194,
+   "duration_frames": 103
+  },
+  {
+   "support_elbow_min_deg": 25.885031060103987,
+   "support_elbow_mean_deg": 147.09496195270825,
+   "hip_travel_px": 109.83263032449864,
+   "duration_frames": 31
+  }
+ ],
+ "settings": {
+  "contact_radius_frac": 0.12,
+  "min_contact_frames": 7
+ },
+ "cache_dir": "/Users/ahaan/Send-it-climbing-CV/demo_assets/spraywall/cache"
+}

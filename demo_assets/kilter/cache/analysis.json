@@ -1,0 +1,272 @@
+{
+ "video": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/kilter_climb.avi",
+ "w": 1080,
+ "h": 1920,
+ "fps": 30.07915567282322,
+ "n_frames": 133,
+ "canvas_w": 1080,
+ "canvas_h": 1920,
+ "T": [
+  [
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "camera": {
+  "static": true,
+  "max_shift_px": 14.69301986694336,
+  "ref_idx": 66
+ },
+ "timing": {
+  "pose_s": 0.0005478858947753906,
+  "stabilize_s": 0.008170843124389648,
+  "total_s": 0.8748059272766113
+ },
+ "morphology": {
+  "arm_span_px": 418.0024865939927,
+  "shoulder_width_px": 95.64878011856204,
+  "upper_arm_px": 70.2816999888866,
+  "forearm_px": 69.35022334645905,
+  "hand_px": 21.5449299023697,
+  "torso_px": 152.5920092313214,
+  "thigh_px": 113.90936184074312,
+  "shin_px": 94.08711889778353,
+  "leg_len_px": 207.99648073852666,
+  "height_proxy_px": 360.58848996984807,
+  "n_pose_frames": 130,
+  "pose_detection_rate": 0.9774436090225563,
+  "ratios": {
+   "arm_span_over_height_proxy": 1.1592230429455626,
+   "forearm_over_upper_arm": 0.9867465265840917,
+   "leg_over_arm_span": 0.4975962761210901
+  }
+ },
+ "hold_method": "led",
+ "wall_type": "led",
+ "holds": [
+  {
+   "id": 0,
+   "x": 851.9060668945312,
+   "y": 1141.6700439453125,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H0",
+   "hits": 25,
+   "hue": 84
+  },
+  {
+   "id": 1,
+   "x": 812.4730834960938,
+   "y": 1070.6917724609375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H1",
+   "hits": 25,
+   "hue": 94
+  },
+  {
+   "id": 2,
+   "x": 670.18896484375,
+   "y": 930.6226196289062,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "led",
+   "label": "H2",
+   "hits": 25,
+   "hue": 14
+  },
+  {
+   "id": 3,
+   "x": 205.41241455078125,
+   "y": 691.1556396484375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H3",
+   "hits": 25,
+   "hue": 98
+  },
+  {
+   "id": 4,
+   "x": 565.0969848632812,
+   "y": 672.5640869140625,
+   "grip": 3,
+   "on_route": true,
+   "role": "finish",
+   "source": "led",
+   "label": "H4",
+   "hits": 25,
+   "hue": 87
+  },
+  {
+   "id": 5,
+   "x": 398.7355651855469,
+   "y": 624.7819213867188,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H5",
+   "hits": 25,
+   "hue": 91
+  },
+  {
+   "id": 6,
+   "x": 614.4635620117188,
+   "y": 606.606689453125,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H6",
+   "hits": 25,
+   "hue": 104
+  },
+  {
+   "id": 7,
+   "x": 338.7571716308594,
+   "y": 564.930908203125,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H7",
+   "hits": 25,
+   "hue": 102
+  },
+  {
+   "id": 8,
+   "x": 116.2509994506836,
+   "y": 519.6970825195312,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H8",
+   "hits": 25,
+   "hue": 106
+  },
+  {
+   "id": 9,
+   "x": 472.624267578125,
+   "y": 935.74169921875,
+   "grip": 3,
+   "on_route": true,
+   "role": "start",
+   "source": "led",
+   "label": "H9",
+   "hits": 21,
+   "hue": 13
+  },
+  {
+   "id": 10,
+   "x": 681.7999267578125,
+   "y": 1059.159912109375,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H10",
+   "hits": 15,
+   "hue": 79
+  },
+  {
+   "id": 11,
+   "x": 593.2322998046875,
+   "y": 1036.0086669921875,
+   "grip": 3,
+   "on_route": true,
+   "role": null,
+   "source": "led",
+   "label": "H11",
+   "hits": 11,
+   "hue": 12
+  }
+ ],
+ "events": [
+  {
+   "hand": "LEFT",
+   "hold_id": 9,
+   "start": 4,
+   "end": 79,
+   "frames": 76
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 2,
+   "start": 4,
+   "end": 87,
+   "frames": 84
+  },
+  {
+   "hand": "LEFT",
+   "hold_id": 9,
+   "start": 81,
+   "end": 118,
+   "frames": 38
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 4,
+   "start": 94,
+   "end": 132,
+   "frames": 39
+  }
+ ],
+ "placements": [
+  {
+   "hand": "LEFT",
+   "hold_id": 9,
+   "frame": 4,
+   "end": 79
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 2,
+   "frame": 4,
+   "end": 87
+  },
+  {
+   "hand": "RIGHT",
+   "hold_id": 4,
+   "frame": 94,
+   "end": 132
+  }
+ ],
+ "move_context": [
+  {
+   "support_elbow_min_deg": 156.75592577630636,
+   "support_elbow_mean_deg": 156.75592577630636,
+   "hip_travel_px": 0.0,
+   "duration_frames": 0
+  },
+  {
+   "support_elbow_min_deg": 6.6527852960617615,
+   "support_elbow_mean_deg": 145.03234863304496,
+   "hip_travel_px": 329.15209644927774,
+   "duration_frames": 90
+  }
+ ],
+ "settings": {
+  "contact_radius_frac": 0.12,
+  "min_contact_frames": 8
+ },
+ "cache_dir": "/Users/ahaan/Send-it-climbing-CV/demo_assets/kilter/cache"
+}

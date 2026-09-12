@@ -1,0 +1,20 @@
+{
+  "demos": [
+    {
+      "key": "spraywall",
+      "name": "Spray wall (own footage, handheld camera)",
+      "video": "demo_assets/skeleton_overlay.mp4",
+      "cache": "demo_assets/spraywall/cache",
+      "wall_type": "color",
+      "blurb": "25 s boulder on a dense spray wall filmed by hand. Camera motion is compensated with feature-matched homographies so holds and hands live in one wall coordinate frame."
+    },
+    {
+      "key": "kilter",
+      "name": "Kilter-style LED board (static camera)",
+      "video": "demo_assets/kilter/kilter_climb.avi",
+      "cache": "demo_assets/kilter/cache",
+      "wall_type": "led",
+      "blurb": "Lit holds define the route objectively. Footage from the public CruxCam dataset."
+    }
+  ]
+}

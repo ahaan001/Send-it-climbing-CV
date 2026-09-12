@@ -1,0 +1,42 @@
+{
+ "observed_cost": 21.21810979116609,
+ "observed_moves": 11,
+ "optimized_cost": 9.781896491546924,
+ "optimized_moves": 5,
+ "improvement_frac": 0.5389836046743663,
+ "crux": "Moving the right hand H62 -> H12 is the highest-cost move under our model, driven by a long normalized reach (82% of arm span).",
+ "simulated_85_cost": 11.587562856177122,
+ "simulated_85_moves": 6,
+ "simulated_85_holds": [
+  61,
+  62,
+  16,
+  20,
+  29,
+  32,
+  37,
+  45
+ ],
+ "optimized_holds": [
+  61,
+  62,
+  16,
+  25,
+  32,
+  37,
+  45
+ ],
+ "observed_holds": [
+  61,
+  62,
+  12,
+  20,
+  25,
+  29,
+  21,
+  32,
+  35,
+  45,
+  63
+ ]
+}
