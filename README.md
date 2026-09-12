@@ -101,7 +101,8 @@ Instead of failing silently, every failure-prone stage has a manual override:
 * **Hold inference from behaviour** — holds the detector missed but the climber's hands dwelled on are proposed
   automatically (`source = dwell`). In the spray-wall demo the two dark start holds were recovered this way.
 * **Grip rating** — a 1–5 subjective quality score per hold that feeds the objective.
-* **Wall type** — auto, lit board, or normal wall.
+* **Wall type** — auto (lit-pixel fraction inside the dark board mask), lit board, or normal wall.
+* **Route colour filter** — set routes are usually one colour; keep only those holds on route in one click.
 * The observed sequence is re-derived from the corrected hold set at the press of a button.
 
 Workflow: **automatic detection → human correction → optimization**, and the corrected set can be saved as the
@@ -135,8 +136,12 @@ live run), plus live re-run and upload modes:
 | Spray wall | own phone footage, handheld | camera-motion compensation, 61 detected/inferred/curated holds, 11-move observed beta vs 5-move optimized beta, morphology re-routing |
 | Kilter-style LED board | public CruxCam dataset (static camera) | objective route membership from lit holds; full-route plan for measured vs simulated climber |
 
-Emergency fallback renders (`demo_assets/<demo>/comparison.png`, `diff.png`, `graph.png`, `personalize.png`) and a
-3-minute script (`docs/PRESENTATION.md`) and judge Q&A (`docs/JUDGE_QA.md`) are included.
+**Three reliability layers.** (1) Live: upload → full pipeline (≈ 20–30 s). (2) Demo: the same pipeline's cached
+output loads instantly and every edit/slider re-optimizes live. (3) Emergency: pre-rendered results
+(`demo_assets/<demo>/comparison.png`, `diff.png`, `graph.png`, `personalize.png`) and browser screenshots
+(`docs/screenshots/`). A 3-minute script (`docs/PRESENTATION.md`), judge Q&A (`docs/JUDGE_QA.md`) and submission blurb
+(`docs/SUBMISSION.md`) are included. `scripts/ui_screenshots.py` drives the running app with Playwright (tabs, hold
+click-select, demo switch, upload) and regenerates the screenshots.
 
 ### Installation
 

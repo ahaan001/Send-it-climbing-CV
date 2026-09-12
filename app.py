@@ -320,6 +320,17 @@ with tab_route:
                 refresh_observed()
                 st.rerun()
         st.markdown("#### Hold set")
+        colors = sorted({h.get("color") for h in ss.holds if h.get("color")})
+        if colors:
+            on_colors = sorted({h.get("color") for h in ss.holds if h.get("color") and h.get("on_route", True)})
+            pick = st.multiselect("Route colour filter (set routes are usually one colour; spray walls use all)",
+                                  colors, default=on_colors or colors, help="Only holds of the selected colours stay on route for hands. Inferred/manual holds are unaffected.")
+            if set(pick) != set(on_colors):
+                for h in ss.holds:
+                    if h.get("color"):
+                        h["on_route"] = h["color"] in pick
+                refresh_observed()
+                st.rerun()
         c1, c2, c3 = st.columns(3)
         if c1.button("Reset to auto-detected"):
             ss.holds = [dict(h) for h in A["holds"]]
